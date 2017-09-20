@@ -1,0 +1,10 @@
+click==6.7
+dlib==19.7.0
+face-recognition==1.0.0
+face-recognition-models==0.2.0
+numpy==1.13.1
+olefile==0.44
+Pillow==4.2.1
+pyzmq==16.0.2
+scipy==0.19.1
+zmq==0.0.0
