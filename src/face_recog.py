@@ -89,10 +89,10 @@ def find_key(input_dict, value):
 
 def check_n_generate_encodings():
     print("Loading all known faces")
-    full_paths, base_paths = load_image_folder(face_conf.face_conf['known_faces_folder'])
+    full_paths, base_paths = load_image_folder(face_conf.recognition['known_faces_folder'])
     # If the encodings for faces are calculated before, load and use them
-    if os.path.exists(face_conf.face_conf['encodings_file_name'] + '.pkl'):
-        encodings = load_encodings(face_conf.face_conf['encodings_file_name'])
+    if os.path.exists(face_conf.recognition['encodings_file_name'] + '.pkl'):
+        encodings = load_encodings(face_conf.recognition['encodings_file_name'])
     else:
         print("Calculating encodings of known faces")
         encodings = get_encodings_of_imgs(full_paths)
@@ -120,9 +120,9 @@ def init_server(address):
 
 def handle_requests(socket, encodings, img_list):
     # Load configs once
-    factor = face_conf.face_conf['factor']
-    knn = face_conf.face_conf['knn']
-    similarity_threshold = face_conf.face_conf['similarity_threshold']
+    factor = face_conf.recognition['factor']
+    knn = face_conf.recognition['knn']
+    similarity_threshold = face_conf.recognition['similarity_threshold']
 
     while True:
         result_dict = {}

@@ -2,8 +2,8 @@ import os
 import cv2
 import zmq
 import json
-import config
 import base64
+import face_conf
 
 
 def init_client(address):
@@ -137,7 +137,7 @@ if __name__ == '__main__':
 
     image = cv2.imread(input_path, 1)
     encoded_img = read_image_base64(input_path)
-    address = config.get_tcp_address(host, port)
+    address = face_conf.get_tcp_address(host, port)
     socket = init_client(address)
 
     print ("Sending request..")

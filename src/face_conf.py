@@ -14,7 +14,7 @@ server = {
     "port" : "54444"
 }
 
-face_conf = {
+recognition = {
     "known_faces_folder" : BASE_FOLDER + "/" + "KnownPeeps",
     "width" : 250,
     "height" : 250,
