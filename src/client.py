@@ -2,8 +2,8 @@ import os
 import cv2
 import zmq
 import json
-import config
 import base64
+import face_conf
 
 
 def init_client(address):
@@ -82,9 +82,9 @@ def annotate_crcl(image, message, out_path):
                     text,
                     (text_x, text_y),
                     cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
+                    1,
                     (0, 0, 0),
-                    1.5,
+                    1,
                     cv2.LINE_AA
                 )
 
@@ -128,16 +128,16 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "54444"
+    port = "54321"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    # input_path = "/home/taylan/Desktop/lexus.jpg"
-    input_path = '/home/taylan/w_Python/oguzhan_face/Face/train/Alejandro_Toledo_0028.jpg'
+    input_path = "/home/taylan/Desktop/lexus.jpg"
+    # input_path = '/home/taylan/w_Python/oguzhan_face/Face/train/Alejandro_Toledo_0028.jpg'
 
     image = cv2.imread(input_path, 1)
     encoded_img = read_image_base64(input_path)
-    address = config.get_tcp_address(host, port)
+    address = face_conf.get_tcp_address(host, port)
     socket = init_client(address)
 
     print ("Sending request..")
@@ -150,7 +150,7 @@ if __name__ == '__main__':
     # use annotate_crcl() for cropper and classifier
     # use annotate_face() for face recog
     try:
-        annotate_face(image, message, current_dir)
+        annotate_crcl(image, message, current_dir)
     except Exception as e:
         print ("Could not annotate the given image.")
         print(e)
