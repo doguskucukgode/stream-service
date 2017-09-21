@@ -1,7 +1,7 @@
 import multiprocessing
 import time
 import sys
-import config
+import service_config as config
 import zmq
 import cv2
 import json
@@ -16,7 +16,6 @@ TYPE_FACE_DETECTION = 1
 
 ACTION_START = 0
 ACTION_STOP = 1
-ZMQ_URL_CR_CL = "tcp://localhost:54321"
 INTERVAL = 20
 COPY_COUNT = 8
 RECONNECT_TIME_OUT = 10
@@ -34,12 +33,13 @@ class ReceivedInput:
 
 
 class StreamProcess(multiprocessing.Process):
-    def __init__(self,read_url,write_url,id):
+    def __init__(self,read_url,write_url,type,id):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.read_url = read_url
         self.write_url = write_url
         self.id = id
+        self.type = type
 
 
     def init_client(self,address):
@@ -53,7 +53,10 @@ class StreamProcess(multiprocessing.Process):
 
 
     def run(self):
-        socket = self.init_client(ZMQ_URL_CR_CL)
+        if self.type == TYPE_CAR_CLASSIFICATION:
+            socket = self.init_client(config.service["ZMQ_URL_CR_CL"])
+        elif self.type == TYPE_FACE_DETECTION:
+            socket = self.init_client(config.service["ZMQ_URL_FACE"])
         print("Client initialized")
         print("Connecting stream "+self.read_url+"...")
         cap = cv2.VideoCapture(self.read_url)
@@ -83,6 +86,8 @@ class StreamProcess(multiprocessing.Process):
         p.stdin.close()
         p.wait()
         print ("You exited!")
+
+
     def send_stream(self,frame,popen,i,socket):
         if i%INTERVAL == 0:
             try:
@@ -94,7 +99,10 @@ class StreamProcess(multiprocessing.Process):
                 #print ("Received reply: ", message)
             except Exception as e:
                 print(str(e))
-            annotated_img = self.annotate_crcl(frame, message)
+            if self.type == TYPE_CAR_CLASSIFICATION :
+                annotated_img = self.annotate_crcl(frame, message)
+            elif self.type == TYPE_FACE_DETECTION :
+                annotated_img = self.annotate_face(frame, message)
             cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
             im = Image.fromarray(cv2_im)
             counter = 0
@@ -106,6 +114,8 @@ class StreamProcess(multiprocessing.Process):
             cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
             im = Image.fromarray(cv2_im)
             im.save(popen.stdin, 'JPEG')
+
+
     def read_image_base64_pil(self,im):
         try:
             buffer = io.BytesIO()
@@ -114,6 +124,7 @@ class StreamProcess(multiprocessing.Process):
             return encoded_img
         except Exception as e:
             print ("Could not read the given image: " + str(e))
+
     def annotate_crcl(self,image, message):
         try:
             results = json.loads(message.decode("utf-8"))['result']
@@ -129,7 +140,7 @@ class StreamProcess(multiprocessing.Process):
                             image,
                             (int(topleft['x']), int(topleft['y'])),
                             (int(bottomright['x']), int(bottomright['y'])),
-                            (255, 255, 255)
+                            (0, 0, 0)
                         )
                         predictions = res['predictions']
                         text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
@@ -149,6 +160,43 @@ class StreamProcess(multiprocessing.Process):
             print ("Could not annotate the given image.")
             print(str(e))
         return image
+
+
+    def annotate_face(self,image, message):
+        try:
+            results = json.loads(message.decode("utf-8"))['result']
+            for res in results:
+                topleft = res['topleft']
+                bottomright = res['bottomright']
+                name = res['name']
+
+                cv2.rectangle(
+                    image,
+                    (int(topleft['x']), int(topleft['y'])),
+                    (int(bottomright['x']), int(bottomright['y'])),
+                    (255, 255, 255),
+                    2
+                )
+
+                cv2.rectangle(
+                    image,
+                    (int(topleft['x']), int(bottomright['y']) - 25),
+                    (int(bottomright['x']), int(bottomright['y'])),
+                    (255, 255, 255),
+                    cv2.FILLED
+                )
+                font = cv2.FONT_HERSHEY_DUPLEX
+                cv2.putText(
+                    image, name,
+                    (int(topleft['x']) + 6, int(bottomright['y']) - 6),
+                    font, 1.0, (0, 0, 0), 1
+                )
+        except Exception as e:
+            print ("Could not annotate the given image.")
+            print(str(e))
+        return image
+
+
     def shutdown(self):
         print ("Shutdown initiated ", self.read_url)
         self.exit.set()
@@ -179,27 +227,33 @@ def decode_input(received_input,stream_list):
     try:
         if (received_input.action == ACTION_START):
             print("START command " + received_input.read_url + " received")
-            if(received_input.input_type == TYPE_CAR_CLASSIFICATION):
+            message = None
+            process = None
+            for stream in stream_list:
+                if (stream.id == received_input.write_url):
+                    message = "Already in use"
+                    print(message)
+                    break
+            if message is None:
                 #start car classification process
-                process = StreamProcess(received_input.read_url,received_input.write_url,received_input.write_url)
+                process = StreamProcess(received_input.read_url , received_input.write_url , received_input.input_type, received_input.write_url)
                 process.start()
                 stream_list.append(process)
-            else:
-                #start face detection process
-                process = StreamProcess(received_input.read_url,received_input.write_url,received_input.write_url)
-                process.start()
-                stream_list.append(process)
+
         elif (received_input.action == ACTION_STOP):
             print("STOP command " + received_input.read_url + " received")
             process = None
             for stream in stream_list:
-                print("Stream with id : " + stream.id)
+                #print("Stream with id : " + stream.id)
                 if (stream.id == received_input.write_url):
                     process = stream
                     stream.shutdown()
                     stream_list.remove(stream)
                     break
-        return process,stream_list
+            if process is None:
+                message = "Stream not found"
+                print(message)
+        return process,stream_list,message
     except Exception as e:
         message = "Cannot decode input."
         print(message + str(e))
@@ -224,14 +278,14 @@ def handle_requests(socket):
             json_data = decode_request(request)
             received_input = decode_json(json_data)
             print("Before Size of stream_list : " , len(stream_list))
-            process,stream_list = decode_input(received_input,stream_list)
+            process,stream_list,decode_message = decode_input(received_input,stream_list)
             print("After Size of stream_list : " , len(stream_list))
             # Build and send the json
             result_dict = {}
             if process is not None:
                 result_dict["result"] = process.id
             else:
-                result_dict["result"] = ""
+                result_dict["result"] = decode_message
             result_dict["message"] = "OK"
             socket.send_json(result_dict)
         except Exception as e:
@@ -245,7 +299,7 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = config.get_tcp_address(config.cropper["host"], config.cropper["port"])
+        tcp_address = config.get_tcp_address(config.service["host"], config.service["port"])
         socket = init_server(tcp_address)
         print('Server is started on:', tcp_address)
         handle_requests(socket)
