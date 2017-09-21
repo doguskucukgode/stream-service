@@ -16,9 +16,10 @@ TYPE_FACE_DETECTION = 1
 
 ACTION_START = 0
 ACTION_STOP = 1
-INTERVAL = 20
-COPY_COUNT = 8
-RECONNECT_TIME_OUT = 10
+INTERVAL = 24
+COPY_COUNT = 5
+RECONNECT_TIME_OUT = 5
+RECONNECT_TRY_COUNT = 5
 
 class ReceivedInput:
     input_type = 0
@@ -61,7 +62,6 @@ class StreamProcess(multiprocessing.Process):
         print("Connecting stream "+self.read_url+"...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized "+self.read_url)
-        fps, duration = 24, 100
         p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
         print("Popen initialized")
         tryCount = 0
@@ -72,49 +72,69 @@ class StreamProcess(multiprocessing.Process):
             #print("Frame read, capture : " + str(ret))
             if ret is True:
                 #print("Frame read ",i)
-                tryCount = 0
-                self.send_stream(frame, p,i,socket)
+                try:
+                    self.send_stream(frame, p,i,socket)
+                    tryCount = 0
+                except Exception as e:
+                    tryCount,cap,end_loop = self.reconnect(tryCount,p)
+                    if(end_loop):
+                        break
             else:
-                #wait for some time
-                time.sleep(RECONNECT_TIME_OUT)
-                if tryCount == 10:
+                tryCount,cap,p,end_loop = self.reconnect(tryCount,p)
+                if(end_loop):
                     break
-                print("Reconnecting stream "+self.read_url+"...")
-                cap = cv2.VideoCapture(self.read_url)
-                print("Video Capture initialized "+self.read_url)
-                tryCount = tryCount +1
         p.stdin.close()
         p.wait()
-        print ("You exited!")
+        print (self.write_url + " exited!")
 
+    def reconnect(self,tryCount,p):
+        #wait for some time
+        time.sleep(RECONNECT_TIME_OUT)
+        if tryCount == RECONNECT_TRY_COUNT:
+            end_loop = True
+            return tryCount,None,True
+        else:
+            p.stdin.close()
+            p.wait()
+            print("Reconnecting stream "+self.read_url+"...")
+            cap = cv2.VideoCapture(self.read_url)
+            print("Video Capture reinitialized "+self.read_url)
+            p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+            print("Popen reinitialized")
+            tryCount = tryCount +1
+            return tryCount,cap,p,False
 
     def send_stream(self,frame,popen,i,socket):
-        if i%INTERVAL == 0:
-            try:
-                cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+        try:
+            if i%INTERVAL == 0:
+                try:
+                    cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+                    im = Image.fromarray(cv2_im)
+                    encoded_img = self.read_image_base64_pil(im)
+                    socket.send(encoded_img)
+                    message = socket.recv()
+                    #print ("Received reply: ", message)
+                except Exception as e:
+                    print(str(e))
+                if self.type == TYPE_CAR_CLASSIFICATION :
+                    annotated_img = self.annotate_crcl(frame, message)
+                elif self.type == TYPE_FACE_DETECTION :
+                    annotated_img = self.annotate_face(frame, message)
+                cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
                 im = Image.fromarray(cv2_im)
-                encoded_img = self.read_image_base64_pil(im)
-                socket.send(encoded_img)
-                message = socket.recv()
-                #print ("Received reply: ", message)
-            except Exception as e:
-                print(str(e))
-            if self.type == TYPE_CAR_CLASSIFICATION :
-                annotated_img = self.annotate_crcl(frame, message)
-            elif self.type == TYPE_FACE_DETECTION :
-                annotated_img = self.annotate_face(frame, message)
-            cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
-            im = Image.fromarray(cv2_im)
-            counter = 0
-            while counter<COPY_COUNT:
+                counter = 0
+                while counter<COPY_COUNT:
+                    im.save(popen.stdin, 'JPEG')
+                    counter = counter + 1
+            else :
+                annotated_img = frame
+                cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
+                im = Image.fromarray(cv2_im)
                 im.save(popen.stdin, 'JPEG')
-                counter = counter + 1
-        else :
-            annotated_img = frame
-            cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
-            im = Image.fromarray(cv2_im)
-            im.save(popen.stdin, 'JPEG')
-
+        except Exception as e:
+            print(str(e))
+            #Broken pipe error try reconnect
+            raise e
 
     def read_image_base64_pil(self,im):
         try:
@@ -225,6 +245,12 @@ def decode_json(json_data):
 
 def decode_input(received_input,stream_list):
     try:
+        #remove dead processes
+        for stream in stream_list:
+            if (not stream.is_alive()):
+                stream_list.remove(stream)
+
+        #handle commands
         if (received_input.action == ACTION_START):
             print("START command " + received_input.read_url + " received")
             message = None
@@ -243,6 +269,7 @@ def decode_input(received_input,stream_list):
         elif (received_input.action == ACTION_STOP):
             print("STOP command " + received_input.read_url + " received")
             process = None
+            message = None
             for stream in stream_list:
                 #print("Stream with id : " + stream.id)
                 if (stream.id == received_input.write_url):
