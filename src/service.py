@@ -6,6 +6,8 @@ import time
 import cv2
 import json
 import base64
+import requests
+from requests.auth import HTTPDigestAuth
 import numpy as np
 from PIL import Image
 import multiprocessing
@@ -255,18 +257,19 @@ def decode_input(received_input,stream_list):
             if (not stream.is_alive()):
                 stream_list.remove(stream)
 
+        message = "OK"
+        result = None
         #handle commands
         if (received_input.action == serv_conf.actions["ACTION_START"]):
-            print("START command " + received_input.read_url + " received")
-            message = None
             process = None
+            print("START command " + received_input.read_url + " received")
             for stream in stream_list:
                 if (stream.id == received_input.write_url):
-                    message = "Already in use"
-                    print(message)
+                    result = "Already in use"
+                    print(result)
                     break
 
-            if message is None:
+            if result is None:
                 #start car classification process
                 process = StreamProcess(
                     received_input.read_url,
@@ -278,9 +281,8 @@ def decode_input(received_input,stream_list):
                 stream_list.append(process)
 
         elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
-            print("STOP command " + received_input.read_url + " received")
             process = None
-            message = None
+            print("STOP command " + received_input.read_url + " received")
             for stream in stream_list:
                 #print("Stream with id : " + stream.id)
                 if (stream.id == received_input.write_url):
@@ -288,10 +290,33 @@ def decode_input(received_input,stream_list):
                     stream.shutdown()
                     stream_list.remove(stream)
                     break
+
             if process is None:
-                message = "Stream not found"
-                print(message)
-        return process, stream_list, message
+                result = "Stream not found"
+                message = "FAIL"
+                print(result)
+            else:
+                result = process.id
+
+        elif (received_input.action == serv_conf.actions["ACTION_CHECK"]):
+            print("CHECK command " + received_input.read_url + " received")
+            try:
+                r = requests.get(
+                    serv_conf.stream_stat["url"],
+                    headers=serv_conf.stream_stat["headers"],
+                    auth=HTTPDigestAuth(
+                        serv_conf.stream_stat["auth-user"],
+                        serv_conf.stream_stat["auth-pass"]
+                    )
+                )
+
+                result = r.content["incomingStreams"]
+            except Exception as e:
+                result = "Request to check stream status failed."
+                message = "FAIL"
+                print(result)
+
+        return stream_list, message, result
     except Exception as e:
         message = "Cannot decode input."
         print(message + str(e))
@@ -318,15 +343,12 @@ def handle_requests(socket):
             json_data = decode_request(request)
             received_input = decode_json(json_data)
             print("Before Size of stream_list : " , len(stream_list))
-            process, stream_list, decode_message = decode_input(received_input, stream_list)
+            stream_list, decode_message, result = decode_input(received_input, stream_list)
             print("After Size of stream_list : " , len(stream_list))
             # Build and send the json
             result_dict = {}
-            if process is not None:
-                result_dict["result"] = process.id
-            else:
-                result_dict["result"] = decode_message
-            result_dict["message"] = "OK"
+            result_dict["result"] = result
+            result_dict["message"] = decode_message
             socket.send_json(result_dict)
         except Exception as e:
             print(e)
