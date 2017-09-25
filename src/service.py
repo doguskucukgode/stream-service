@@ -260,6 +260,7 @@ def decode_input(received_input,stream_list):
         message = "OK"
         result = None
         #handle commands
+        #Action start command
         if (received_input.action == serv_conf.actions["ACTION_START"]):
             process = None
             print("START command " + received_input.read_url + " received")
