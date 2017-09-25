@@ -280,7 +280,7 @@ def decode_input(received_input,stream_list):
                 process.start()
                 stream_list.append(process)
                 result = process.id
-
+        #Action stop command
         elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
             process = None
             print("STOP command " + received_input.read_url + " received")
