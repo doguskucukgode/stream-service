@@ -22,7 +22,7 @@ class ReceivedInput:
     action = 0
     read_url = ""
     write_url = ""
-    def __init__(self,input_type,read_url,write_url,action):
+    def __init__(self, input_type, read_url, write_url, action):
         self.input_type = input_type
         self.read_url = read_url
         self.write_url = write_url
@@ -30,13 +30,13 @@ class ReceivedInput:
 
 
 class StreamProcess(multiprocessing.Process):
-    def __init__(self,read_url,write_url,type,id):
+    def __init__(self, read_url, write_url, stype, sid):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.read_url = read_url
         self.write_url = write_url
-        self.id = id
-        self.type = type
+        self.sid = sid
+        self.stype = stype
 
 
     def init_client(self,address):
@@ -50,9 +50,9 @@ class StreamProcess(multiprocessing.Process):
 
 
     def run(self):
-        if self.type == serv_conf.stream["TYPE_CAR_CLASSIFICATION"]:
+        if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"]:
             socket = self.init_client(serv_conf.service["ZMQ_URL_CR_CL"])
-        elif self.type == serv_conf.stream["TYPE_FACE_DETECTION"]:
+        elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"]:
             socket = self.init_client(serv_conf.service["ZMQ_URL_FACE"])
 
         print("Client initialized")
@@ -116,9 +116,9 @@ class StreamProcess(multiprocessing.Process):
                     #print ("Received reply: ", message)
                 except Exception as e:
                     print(str(e))
-                if self.type == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                     annotated_img = self.annotate_crcl(frame, message)
-                elif self.type == serv_conf.stream["TYPE_FACE_DETECTION"] :
+                elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
                     annotated_img = self.annotate_face(frame, message)
                 cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                 im = Image.fromarray(cv2_im)
@@ -265,7 +265,7 @@ def decode_input(received_input,stream_list):
             process = None
             print("START command " + received_input.read_url + " received")
             for stream in stream_list:
-                if (stream.id == received_input.write_url):
+                if (stream.sid == received_input.write_url):
                     result = "Already in use"
                     print(result)
                     break
@@ -280,14 +280,14 @@ def decode_input(received_input,stream_list):
                 )
                 process.start()
                 stream_list.append(process)
-                result = process.id
+                result = process.sid
         #Action stop command
         elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
             process = None
             print("STOP command " + received_input.read_url + " received")
             for stream in stream_list:
-                #print("Stream with id : " + stream.id)
-                if (stream.id == received_input.write_url):
+                #print("Stream with sid : " + stream.sid)
+                if (stream.sid == received_input.write_url):
                     process = stream
                     stream.shutdown()
                     stream_list.remove(stream)
@@ -298,7 +298,7 @@ def decode_input(received_input,stream_list):
                 message = "FAIL"
                 print(result)
             else:
-                result = process.id
+                result = process.sid
 
         elif (received_input.action == serv_conf.actions["ACTION_CHECK"]):
             print("CHECK command received")
