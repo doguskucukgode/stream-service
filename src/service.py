@@ -1,25 +1,19 @@
-import multiprocessing
-import time
-import sys
-import service_config as config
+# External configs
+import io
 import zmq
+import sys
+import time
 import cv2
 import json
-import numpy as np
-import io
 import base64
-from subprocess import Popen, PIPE
+import numpy as np
 from PIL import Image
+import multiprocessing
+from subprocess import Popen, PIPE
 
-TYPE_CAR_CLASSIFICATION = 0
-TYPE_FACE_DETECTION = 1
+# Internal configs
+import service_config as serv_conf
 
-ACTION_START = 0
-ACTION_STOP = 1
-INTERVAL = 24
-COPY_COUNT = 5
-RECONNECT_TIME_OUT = 5
-RECONNECT_TRY_COUNT = 5
 
 class ReceivedInput:
     input_type = 0
@@ -54,61 +48,65 @@ class StreamProcess(multiprocessing.Process):
 
 
     def run(self):
-        if self.type == TYPE_CAR_CLASSIFICATION:
-            socket = self.init_client(config.service["ZMQ_URL_CR_CL"])
-        elif self.type == TYPE_FACE_DETECTION:
-            socket = self.init_client(config.service["ZMQ_URL_FACE"])
+        if self.type == serv_conf.stream["TYPE_CAR_CLASSIFICATION"]:
+            socket = self.init_client(serv_conf.service["ZMQ_URL_CR_CL"])
+        elif self.type == serv_conf.stream["TYPE_FACE_DETECTION"]:
+            socket = self.init_client(serv_conf.service["ZMQ_URL_FACE"])
+
         print("Client initialized")
-        print("Connecting stream "+self.read_url+"...")
+        print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
-        print("Video Capture initialized "+self.read_url)
+        print("Video Capture initialized " + self.read_url)
         p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
         print("Popen initialized")
+
         tryCount = 0
         i = 0
         while not self.exit.is_set():
-            i = (i + 1)%100
+            i = (i + 1) % 100
             ret, frame = cap.read()
             #print("Frame read, capture : " + str(ret))
             if ret is True:
                 #print("Frame read ",i)
                 try:
-                    self.send_stream(frame, p,i,socket)
+                    self.send_stream(frame, p, i, socket)
                     tryCount = 0
                 except Exception as e:
-                    tryCount,cap,end_loop = self.reconnect(tryCount,p)
+                    tryCount, cap, end_loop = self.reconnect(tryCount, p)
                     if(end_loop):
                         break
             else:
-                tryCount,cap,p,end_loop = self.reconnect(tryCount,p)
+                tryCount, cap, p, end_loop = self.reconnect(tryCount, p)
                 if(end_loop):
                     break
         p.stdin.close()
         p.wait()
         print (self.write_url + " exited!")
 
-    def reconnect(self,tryCount,p):
+
+    def reconnect(self, tryCount, p):
         #wait for some time
-        time.sleep(RECONNECT_TIME_OUT)
-        if tryCount == RECONNECT_TRY_COUNT:
+        time.sleep(serv_conf.stream["RECONNECT_TIME_OUT"])
+        if tryCount == serv_conf.stream["RECONNECT_TRY_COUNT"]:
             end_loop = True
-            return tryCount,None,True
+            return tryCount, None, True
         else:
             p.stdin.close()
             p.wait()
-            print("Reconnecting stream "+self.read_url+"...")
+            print("Reconnecting stream " + self.read_url + "...")
             cap = cv2.VideoCapture(self.read_url)
-            print("Video Capture reinitialized "+self.read_url)
-            p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+            print("Video Capture reinitialized " + self.read_url)
+            p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
             print("Popen reinitialized")
-            tryCount = tryCount +1
-            return tryCount,cap,p,False
+            tryCount = tryCount + 1
+            return tryCount, cap, p, False
 
-    def send_stream(self,frame,popen,i,socket):
+
+    def send_stream(self, frame, popen, i, socket):
         try:
-            if i%INTERVAL == 0:
+            if i % serv_conf.stream["INTERVAL"] == 0:
                 try:
-                    cv2_im = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+                    cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
                     encoded_img = self.read_image_base64_pil(im)
                     socket.send(encoded_img)
@@ -116,19 +114,19 @@ class StreamProcess(multiprocessing.Process):
                     #print ("Received reply: ", message)
                 except Exception as e:
                     print(str(e))
-                if self.type == TYPE_CAR_CLASSIFICATION :
+                if self.type == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                     annotated_img = self.annotate_crcl(frame, message)
-                elif self.type == TYPE_FACE_DETECTION :
+                elif self.type == serv_conf.stream["TYPE_FACE_DETECTION"] :
                     annotated_img = self.annotate_face(frame, message)
-                cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
+                cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                 im = Image.fromarray(cv2_im)
                 counter = 0
-                while counter<COPY_COUNT:
+                while counter < serv_conf.stream["COPY_COUNT"]:
                     im.save(popen.stdin, 'JPEG')
                     counter = counter + 1
             else :
                 annotated_img = frame
-                cv2_im = cv2.cvtColor(annotated_img,cv2.COLOR_BGR2RGB)
+                cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                 im = Image.fromarray(cv2_im)
                 im.save(popen.stdin, 'JPEG')
         except Exception as e:
@@ -136,7 +134,8 @@ class StreamProcess(multiprocessing.Process):
             #Broken pipe error try reconnect
             raise e
 
-    def read_image_base64_pil(self,im):
+
+    def read_image_base64_pil(self, im):
         try:
             buffer = io.BytesIO()
             im.save(buffer, format="JPEG")
@@ -145,7 +144,8 @@ class StreamProcess(multiprocessing.Process):
         except Exception as e:
             print ("Could not read the given image: " + str(e))
 
-    def annotate_crcl(self,image, message):
+
+    def annotate_crcl(self, image, message):
         try:
             results = json.loads(message.decode("utf-8"))['result']
             #print(results)
@@ -221,6 +221,7 @@ class StreamProcess(multiprocessing.Process):
         print ("Shutdown initiated ", self.read_url)
         self.exit.set()
 
+
 def decode_request(request):
     try:
         json_data = json.loads(request)
@@ -230,18 +231,22 @@ def decode_request(request):
         print(message + str(e))
         raise Exception(message)
 
+
 def decode_json(json_data):
     try:
         message = json_data["message"]
-        received_input = ReceivedInput(int(message["type"]),
-                                       str(message["url"]) + "/" + str(message["read_stream"]),
-                                       str(message["url"]) + "/" + str(message["write_stream"]),
-                                       int(message["action"]))
+        received_input = ReceivedInput(
+            int(message["type"]),
+            str(message["url"]) + "/" + str(message["read_stream"]),
+            str(message["url"]) + "/" + str(message["write_stream"]),
+            int(message["action"])
+        )
         return received_input
     except Exception as e:
         message = "Invalid format."
         print(message + str(e))
         raise Exception(message)
+
 
 def decode_input(received_input,stream_list):
     try:
@@ -251,7 +256,7 @@ def decode_input(received_input,stream_list):
                 stream_list.remove(stream)
 
         #handle commands
-        if (received_input.action == ACTION_START):
+        if (received_input.action == serv_conf.actions["ACTION_START"]):
             print("START command " + received_input.read_url + " received")
             message = None
             process = None
@@ -260,13 +265,19 @@ def decode_input(received_input,stream_list):
                     message = "Already in use"
                     print(message)
                     break
+
             if message is None:
                 #start car classification process
-                process = StreamProcess(received_input.read_url , received_input.write_url , received_input.input_type, received_input.write_url)
+                process = StreamProcess(
+                    received_input.read_url,
+                    received_input.write_url,
+                    received_input.input_type,
+                    received_input.write_url
+                )
                 process.start()
                 stream_list.append(process)
 
-        elif (received_input.action == ACTION_STOP):
+        elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
             print("STOP command " + received_input.read_url + " received")
             process = None
             message = None
@@ -280,11 +291,12 @@ def decode_input(received_input,stream_list):
             if process is None:
                 message = "Stream not found"
                 print(message)
-        return process,stream_list,message
+        return process, stream_list, message
     except Exception as e:
         message = "Cannot decode input."
         print(message + str(e))
         raise Exception(message)
+
 
 def init_server(address):
     try:
@@ -297,6 +309,7 @@ def init_server(address):
         print (message + str(e))
         raise Exception(message)
 
+
 def handle_requests(socket):
     stream_list = []
     while True:
@@ -305,7 +318,7 @@ def handle_requests(socket):
             json_data = decode_request(request)
             received_input = decode_json(json_data)
             print("Before Size of stream_list : " , len(stream_list))
-            process,stream_list,decode_message = decode_input(received_input,stream_list)
+            process, stream_list, decode_message = decode_input(received_input, stream_list)
             print("After Size of stream_list : " , len(stream_list))
             # Build and send the json
             result_dict = {}
@@ -326,7 +339,7 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = config.get_tcp_address(config.service["host"], config.service["port"])
+        tcp_address = serv_conf.get_tcp_address(serv_conf.service["host"], serv_conf.service["port"])
         socket = init_server(tcp_address)
         print('Server is started on:', tcp_address)
         handle_requests(socket)
