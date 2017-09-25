@@ -279,6 +279,7 @@ def decode_input(received_input,stream_list):
                 )
                 process.start()
                 stream_list.append(process)
+                result = process.id
 
         elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
             process = None
@@ -299,7 +300,7 @@ def decode_input(received_input,stream_list):
                 result = process.id
 
         elif (received_input.action == serv_conf.actions["ACTION_CHECK"]):
-            print("CHECK command " + received_input.read_url + " received")
+            print("CHECK command received")
             try:
                 r = requests.get(
                     serv_conf.stream_stat["url"],
@@ -309,9 +310,10 @@ def decode_input(received_input,stream_list):
                         serv_conf.stream_stat["auth-pass"]
                     )
                 )
-
-                result = r.content["incomingStreams"]
+                content = json.loads(r.content.decode("utf-8"))
+                result = content["incomingStreams"]
             except Exception as e:
+                print(e)
                 result = "Request to check stream status failed."
                 message = "FAIL"
                 print(result)
