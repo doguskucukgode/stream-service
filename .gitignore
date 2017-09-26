@@ -4,3 +4,5 @@
 *.jpeg
 *.png
 *.pkl
+*.pb
+*.hdf5
