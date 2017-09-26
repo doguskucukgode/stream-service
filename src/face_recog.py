@@ -60,14 +60,14 @@ def get_encodings_of_imgs(image_path_list):
 
 
 def save_encodings(all_encodings, filename):
-    with open(filename + '.pkl', mode='wb') as f:
+    with open(face_conf.BASE_FOLDER + "/" + filename + '.pkl', mode='wb') as f:
         pickle.dump(all_encodings, f)
         print("Encodings are saved to the file: " + str(filename) + ".pkl")
 
 
 def load_encodings(filename):
     encodings = None
-    with open(filename + '.pkl', mode='rb') as f:
+    with open(face_conf.BASE_FOLDER + "/" + filename + '.pkl', mode='rb') as f:
         encodings = pickle.load(f)
         print("Loaded the encodings from: " + str(filename) + ".pkl")
     return encodings
