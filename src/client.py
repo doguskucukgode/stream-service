@@ -61,32 +61,31 @@ def annotate_crcl(image, message, out_path):
         label = res['label']
         confidence = float(res['confidence'])
         if confidence > 0.5:
-            if label == 'car' or label == 'bus' or label == 'truck':
-                topleft = res['topleft']
-                bottomright = res['bottomright']
+            topleft = res['topleft']
+            bottomright = res['bottomright']
 
-                cv2.rectangle(
-                    image,
-                    (int(topleft['x']), int(topleft['y'])),
-                    (int(bottomright['x']), int(bottomright['y'])),
-                    (255, 255, 255)
-                )
+            cv2.rectangle(
+                image,
+                (int(topleft['x']), int(topleft['y'])),
+                (int(bottomright['x']), int(bottomright['y'])),
+                (255, 255, 255)
+            )
 
-                predictions = res['predictions']
-                text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
-                text_x = int(topleft['x'])
-                text_y = int(topleft['y']) - 10
+            predictions = res['predictions']
+            text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
+            text_x = int(topleft['x'])
+            text_y = int(topleft['y']) - 10
 
-                cv2.putText(
-                    image,
-                    text,
-                    (text_x, text_y),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 0),
-                    1,
-                    cv2.LINE_AA
-                )
+            cv2.putText(
+                image,
+                text,
+                (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (0, 0, 0),
+                1,
+                cv2.LINE_AA
+            )
 
     cv2.imwrite(out_path + '/result.jpg', image)
     print("Annotated image is written to: " + out_path + '/result.jpg')

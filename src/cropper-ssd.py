@@ -125,6 +125,9 @@ def extract_objects(model, image):
             obj_dict = {}
             # Translate integer label of SSDs to string
             obj_dict['label'] = translate_label(cl)
+            # Skip this object if it's not one of these: 'car', 'bus', 'truck'
+            if not obj_dict['label'] in ['car', 'bus']:
+                continue
             # Convert float confidence values into string cos they are not JSON serializable
             obj_dict['confidence'] = str(score)
             ymin = int(box_coords[0] * height)
