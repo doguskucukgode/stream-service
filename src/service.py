@@ -225,7 +225,8 @@ class StreamProcess(multiprocessing.Process):
 
 def decode_request(request):
     try:
-        json_data = json.loads(request)
+        print(str(request.decode("utf-8")))
+        json_data = json.loads(request.decode("utf-8"))
         return json_data
     except Exception as e:
         message = "Could not decode the received request."
@@ -341,7 +342,7 @@ def handle_requests(socket):
     stream_list = []
     while True:
         try:
-            request = socket.recv_json()
+            request = socket.recv()
             json_data = decode_request(request)
             received_input = decode_json(json_data)
             print("Before Size of stream_list : " , len(stream_list))
