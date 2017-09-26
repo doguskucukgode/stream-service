@@ -153,10 +153,9 @@ def extract_objects(model, image):
 def decode_request(request):
     try:
         img = base64.b64decode(request)
-        img = io.BytesIO(img)
-        img = Image.open(img, mode="r")
-        img.load()
-        return np.asarray(img)
+        nparr = np.fromstring(img, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return img
     except Exception as e:
         message = "Could not decode the received request."
         print(message + str(e))
