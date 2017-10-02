@@ -7,6 +7,8 @@ import cv2
 import json
 import base64
 import requests
+import xmltodict
+import requests
 from requests.auth import HTTPDigestAuth
 import numpy as np
 from PIL import Image
@@ -16,23 +18,25 @@ from subprocess import Popen, PIPE
 # Internal configs
 import service_config as serv_conf
 
+STREAM_SERVER_WOWZA = "wowza"
+STREAM_SERVER_NGINX = "nginx"
 
 class ReceivedInput:
-    input_type = 0
-    action = 0
-    read_url = ""
-    write_url = ""
-    def __init__(self, input_type, read_url, write_url, action):
+    def __init__(self, input_type, read_stream, write_stream, action):
         self.input_type = input_type
-        self.read_url = read_url
-        self.write_url = write_url
+        self.read_stream = read_stream
+        self.write_stream = write_stream
         self.action = action
+        self.read_url = serv_conf.service["STREAM_URL"] + "/" + read_stream
+        self.write_url = serv_conf.service["STREAM_URL"] + "/" + write_stream
 
 
 class StreamProcess(multiprocessing.Process):
-    def __init__(self, read_url, write_url, stype, sid):
+    def __init__(self, read_stream, write_stream, stype, sid,read_url,write_url):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
+        self.read_stream = read_stream
+        self.write_stream = write_stream
         self.read_url = read_url
         self.write_url = write_url
         self.sid = sid
@@ -154,7 +158,8 @@ class StreamProcess(multiprocessing.Process):
             for res in results:
                 label = res['label']
                 confidence = float(res['confidence'])
-                if confidence > 0.5:
+                predictions = res['predictions']
+                if confidence > 0.5 and float(predictions[0]['score']) > 0.5:
                     topleft = res['topleft']
                     bottomright = res['bottomright']
                     cv2.rectangle(
@@ -163,7 +168,7 @@ class StreamProcess(multiprocessing.Process):
                         (int(bottomright['x']), int(bottomright['y'])),
                         (0, 0, 0)
                     )
-                    predictions = res['predictions']
+
                     text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
                     text_x = int(topleft['x'])
                     text_y = int(topleft['y']) - 10
@@ -225,7 +230,7 @@ class StreamProcess(multiprocessing.Process):
 
 def decode_request(request):
     try:
-        print(str(request.decode("utf-8")))
+        #print(str(request.decode("utf-8")))
         json_data = json.loads(request.decode("utf-8"))
         return json_data
     except Exception as e:
@@ -239,8 +244,8 @@ def decode_json(json_data):
         message = json_data["message"]
         received_input = ReceivedInput(
             int(message["type"]),
-            str(message["url"]) + "/" + str(message["read_stream"]),
-            str(message["url"]) + "/" + str(message["write_stream"]),
+            str(message["read_stream"]),
+            str(message["write_stream"]),
             int(message["action"])
         )
         return received_input
@@ -267,26 +272,30 @@ def decode_input(received_input,stream_list):
             for stream in stream_list:
                 if (stream.sid == received_input.write_url):
                     result = "Already in use"
+                    message = "FAIL"
                     print(result)
                     break
 
             if result is None:
                 #start car classification process
                 process = StreamProcess(
-                    received_input.read_url,
-                    received_input.write_url,
+                    received_input.read_stream,
+                    received_input.write_stream,
                     received_input.input_type,
+                    received_input.write_url,
+                    received_input.read_url,
                     received_input.write_url
                 )
                 process.start()
                 stream_list.append(process)
-                result = process.sid
+                result = process.write_stream
         #Action stop command
         elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
             process = None
             print("STOP command " + received_input.read_url + " received")
             for stream in stream_list:
                 #print("Stream with sid : " + stream.sid)
+                #print("received_input write_url : " + received_input.write_url)
                 if (stream.sid == received_input.write_url):
                     process = stream
                     stream.shutdown()
@@ -298,21 +307,37 @@ def decode_input(received_input,stream_list):
                 message = "FAIL"
                 print(result)
             else:
-                result = process.sid
+                result = process.write_stream
 
         elif (received_input.action == serv_conf.actions["ACTION_CHECK"]):
-            print("CHECK command received")
+            #print("CHECK command received")
             try:
-                r = requests.get(
-                    serv_conf.stream_stat["url"],
-                    headers=serv_conf.stream_stat["headers"],
-                    auth=HTTPDigestAuth(
-                        serv_conf.stream_stat["auth-user"],
-                        serv_conf.stream_stat["auth-pass"]
+                if(serv_conf.service["STREAM_SERVER"] == STREAM_SERVER_WOWZA):
+                    r = requests.get(
+                        serv_conf.wowza_stream_stat["url"],
+                        headers=serv_conf.wowza_stream_stat["headers"],
+                        auth=HTTPDigestAuth(
+                            serv_conf.wowza_stream_stat["auth-user"],
+                            serv_conf.wowza_stream_stat["auth-pass"]
+                        )
                     )
-                )
-                content = json.loads(r.content.decode("utf-8"))
-                result = content["incomingStreams"]
+                    content = json.loads(r.content.decode("utf-8"))
+                    result = content["incomingStreams"]
+                elif(serv_conf.service["STREAM_SERVER"] == STREAM_SERVER_NGINX):
+                    response = requests.get(serv_conf.nginx_stream_stat["url"])
+                    o = xmltodict.parse(response.content)
+                    stats_json = o["rtmp"]["server"]["application"]["live"]
+                    values= []
+                    #check stream
+                    if 'stream' in stats_json:
+                        stats_json = stats_json['stream']
+                        if isinstance(stats_json,list):
+                            for stat in stats_json:
+                                 values.append(stat)
+                        else:
+                            values.append(stats_json)
+                    result = values
+
             except Exception as e:
                 print(e)
                 result = "Request to check stream status failed."
@@ -345,9 +370,9 @@ def handle_requests(socket):
             request = socket.recv()
             json_data = decode_request(request)
             received_input = decode_json(json_data)
-            print("Before Size of stream_list : " , len(stream_list))
+            #print("Before Size of stream_list : " , len(stream_list))
             stream_list, decode_message, result = decode_input(received_input, stream_list)
-            print("After Size of stream_list : " , len(stream_list))
+            #print("After Size of stream_list : " , len(stream_list))
             # Build and send the json
             result_dict = {}
             result_dict["result"] = result
