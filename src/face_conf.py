@@ -22,5 +22,6 @@ recognition = {
     "similarity_threshold" : 0.50,
     "encodings_file_name" : "encodings",
     "factor" : 2,
-    "knn" : 1
+    "knn" : 1,
+    "not_recog_msg" : "-"
 }

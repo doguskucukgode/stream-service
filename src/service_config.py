@@ -15,7 +15,7 @@ service = {
     "ZMQ_URL_CR_CL" : "tcp://localhost:54321",
     "ZMQ_URL_FACE" : "tcp://localhost:54444",
     "STREAM_URL" : "rtmp://0.0.0.0:1935/live",
-    "STREAM_SERVER" : "wowza" #nginx or wowza
+    "STREAM_SERVER" : "nginx" #nginx or wowza
 }
 
 # Available actions
@@ -29,7 +29,7 @@ actions = {
 stream = {
     "TYPE_CAR_CLASSIFICATION" : 2,
     "TYPE_FACE_DETECTION" : 1,
-    "INTERVAL" : 24,
+    "INTERVAL" : 8,
     "COPY_COUNT" : 5,
     "RECONNECT_TIME_OUT" : 5,
     "RECONNECT_TRY_COUNT" : 5

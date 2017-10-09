@@ -38,7 +38,7 @@ def recognize_face(face_encoding, known_encodings, img_list, knn, similarity_thr
     for i in neighbour_n:
         counts.append(img_list[i])
     if face_distances[neighbour_n[knn-1]] > similarity_threshold:
-        return "Not Recognized"
+        return face_conf.recognition["not_recog_msg"]
     counts = Counter(counts)
     result = counts[max(counts.keys(), key=(lambda k: counts[k]))]
     return counts.most_common()[0][0]
@@ -147,11 +147,13 @@ def handle_requests(socket, encodings, img_list):
             for face_encoding in face_encodings:
                 # See if the face is a match for the known face(s)
                 match_name = recognize_face(face_encoding, encodings, img_list, knn, similarity_threshold)
-                face_names.append(match_name.capitalize())
+                face_names.append(match_name)
 
             predictions = []
             # Display the results
             for (top, right, bottom, left), match_name in zip(face_locations, face_names):
+                if match_name == face_conf.recognition["not_recog_msg"]:
+                    continue
                 # Scale back up face locations since the frame we detected in was scaled to 1/4 size
                 top = int(top * factor)
                 bottom = int(bottom * factor)

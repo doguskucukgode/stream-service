@@ -13,7 +13,9 @@ from requests.auth import HTTPDigestAuth
 import numpy as np
 from PIL import Image
 import multiprocessing
+from random import randint
 from subprocess import Popen, PIPE
+import random
 
 # Internal configs
 import service_config as serv_conf
@@ -41,6 +43,7 @@ class StreamProcess(multiprocessing.Process):
         self.write_url = write_url
         self.sid = sid
         self.stype = stype
+        self.color_map = {}
 
 
     def init_client(self,address):
@@ -63,11 +66,14 @@ class StreamProcess(multiprocessing.Process):
         print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
-        p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+        #p =  Popen(['ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+        p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
         i = 0
+        decoded_msg = None
+        counter = 0
         while not self.exit.is_set():
             i = (i + 1) % 100
             ret, frame = cap.read()
@@ -75,10 +81,10 @@ class StreamProcess(multiprocessing.Process):
             if ret is True:
                 #print("Frame read ",i)
                 try:
-                    self.send_stream(frame, p, i, socket)
+                    decoded_msg,counter = self.send_stream(frame, p, i, socket, decoded_msg, counter)
                     tryCount = 0
                 except Exception as e:
-                    tryCount, cap, end_loop = self.reconnect(tryCount, p)
+                    tryCount, cap, p, end_loop = self.reconnect(tryCount, p)
                     if(end_loop):
                         break
             else:
@@ -102,13 +108,14 @@ class StreamProcess(multiprocessing.Process):
             print("Reconnecting stream " + self.read_url + "...")
             cap = cv2.VideoCapture(self.read_url)
             print("Video Capture reinitialized " + self.read_url)
-            p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+            p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+            #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
             print("Popen reinitialized")
             tryCount = tryCount + 1
             return tryCount, cap, p, False
 
 
-    def send_stream(self, frame, popen, i, socket):
+    def send_stream(self, frame, popen, i, socket, decoded_msg, counter):
         try:
             if i % serv_conf.stream["INTERVAL"] == 0:
                 try:
@@ -120,21 +127,46 @@ class StreamProcess(multiprocessing.Process):
                     #print ("Received reply: ", message)
                 except Exception as e:
                     print(str(e))
-                if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
-                    annotated_img = self.annotate_crcl(frame, message)
-                elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
-                    annotated_img = self.annotate_face(frame, message)
-                cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                im = Image.fromarray(cv2_im)
-                counter = 0
-                while counter < serv_conf.stream["COPY_COUNT"]:
+
+                decoded_msg = json.loads(message.decode("utf-8"))
+                results = decoded_msg['result']
+                return_status = decoded_msg['message']
+                if return_status == 'OK' and len(results) > 0:
+                    if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                        annotated_img = self.annotate_crcl(frame, results)
+                    elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
+                        annotated_img = self.annotate_face(frame, results)
+                    cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+                    im = Image.fromarray(cv2_im)
+                    counter = 0
+                    '''
+                    while counter < serv_conf.stream["COPY_COUNT"]:
+                        im.save(popen.stdin, 'JPEG')
+                        counter = counter + 1
+                    '''
                     im.save(popen.stdin, 'JPEG')
-                    counter = counter + 1
+                else:
+                    im.save(popen.stdin, 'JPEG')
             else :
-                annotated_img = frame
-                cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                im = Image.fromarray(cv2_im)
-                im.save(popen.stdin, 'JPEG')
+                if decoded_msg is not None and counter < serv_conf.stream["COPY_COUNT"]:
+                    #send with coordinate
+                    counter += 1
+                    results = decoded_msg['result']
+                    return_status = decoded_msg['message']
+                    if return_status == 'OK' and len(results) > 0:
+                        if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                            annotated_img = self.annotate_crcl(frame, results)
+                        elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
+                            annotated_img = self.annotate_face(frame, results)
+                        cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
+                        im = Image.fromarray(cv2_im)
+                        im.save(popen.stdin, 'JPEG')
+                else:
+                    decoded_msg = None
+                    cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    im = Image.fromarray(cv2_im)
+                    im.save(popen.stdin, 'JPEG')
+            return decoded_msg,counter
         except Exception as e:
             print(str(e))
             #Broken pipe error try reconnect
@@ -151,34 +183,40 @@ class StreamProcess(multiprocessing.Process):
             print ("Could not read the given image: " + str(e))
 
 
-    def annotate_crcl(self, image, message):
+    def annotate_crcl(self, image, results):
         try:
-            results = json.loads(message.decode("utf-8"))['result']
+            #results = json.loads(message.decode("utf-8"))['result']
             #print(results)
             for res in results:
                 label = res['label']
                 confidence = float(res['confidence'])
                 predictions = res['predictions']
-                if confidence > 0.5 and float(predictions[0]['score']) > 0.5:
+                if confidence > 0.5 and float(predictions[0]['score']) > 0.75:
+                    #color = (220, 152, 52)
+                    if predictions[0]['model'] not in self.color_map:
+                        self.color_map[predictions[0]['model']] = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
+                    color = self.color_map[predictions[0]['model']]
                     topleft = res['topleft']
                     bottomright = res['bottomright']
                     cv2.rectangle(
                         image,
                         (int(topleft['x']), int(topleft['y'])),
                         (int(bottomright['x']), int(bottomright['y'])),
-                        (0, 0, 0)
+                        color,
+                        4
                     )
 
                     text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
-                    text_x = int(topleft['x'])
-                    text_y = int(topleft['y']) - 10
+                    text_x = int(topleft['x']) + 5
+                    text_y = int(bottomright['y']) - 10
                     cv2.putText(
                         image,
                         text,
                         (text_x, text_y),
                         cv2.FONT_HERSHEY_SIMPLEX,
-                        0.5,
-                        (0, 0, 0),
+                        0.7,
+                        #(220, 220, 220),
+                        color,
                         2,
                         cv2.LINE_AA
                     )
@@ -188,9 +226,9 @@ class StreamProcess(multiprocessing.Process):
         return image
 
 
-    def annotate_face(self,image, message):
+    def annotate_face(self,image, results):
         try:
-            results = json.loads(message.decode("utf-8"))['result']
+            #results = json.loads(message.decode("utf-8"))['result']
             for res in results:
                 topleft = res['topleft']
                 bottomright = res['bottomright']
