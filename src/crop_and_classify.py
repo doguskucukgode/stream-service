@@ -1,6 +1,7 @@
 # External imports
 import io
 import os
+import re
 import cv2
 import sys
 import zmq
@@ -15,6 +16,7 @@ import tensorflow as tf
 from keras.models import load_model
 from keras.preprocessing import image
 import keras.backend.tensorflow_backend as K
+from openalpr import Alpr
 
 # Internal imports
 import car_conf
@@ -225,16 +227,6 @@ def init_server(address):
         raise Exception(message)
 
 
-def init_client(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REQ)
-        socket.connect(address)
-        return socket
-    except Exception as e:
-        print ("Could not initialize the client: " + str(e))
-
-
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -266,19 +258,7 @@ def crop_image(image, topleft, bottomright, confidence):
     return None
 
 
-def query_plate(plate_client_socket, cropped_original):
-    encoded_img = cv2.imencode(".jpg", cropped_original)[1]
-    encoded_img = base64.b64encode(encoded_img)
-    plate_client_socket.send(encoded_img)
-    plate_message = plate_client_socket.recv()
-    received_json = json.loads(plate_message.decode("utf-8"))
-    plate = ""
-    if received_json["message"] == "OK":
-        plate = received_json["result"]
-    return plate
-
-
-def handle_requests(socket, plate_client_socket):
+def handle_requests(socket):
     # Load SSD model
     ssd_model = load_SSD_model()
 
@@ -291,10 +271,33 @@ def handle_requests(socket, plate_client_socket):
     sess = K.get_session()
     sess.run(init)
 
+    use_plate_recognition = car_conf.crcl["enable_plate_recognition"]
+    if use_plate_recognition:
+        print("Plate recognition is on, loading OpenALPR..")
+        # Load configs and Alpr() once
+        country = plate_conf.recognition['country']
+        region = plate_conf.recognition['region']
+        openalpr_conf_dir = plate_conf.recognition['openalpr_conf_dir']
+        openalpr_runtime_data_dir = plate_conf.recognition['openalpr_runtime_data_dir']
+        top_n = plate_conf.recognition['top_n']
+
+        # Compile regex that matches with invalid TR plates
+        invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
+        invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+
+        alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
+        if not alpr.is_loaded():
+            print("Error loading OpenALPR")
+            return
+
+        alpr.set_top_n(top_n)
+        alpr.set_default_region(region)
+
 
     # Load model once
     car_classifier_model, car_classifier_loaded_model_json = load_model_and_json()
     print('Loaded both models successfully, ready to roll.')
+    print('Server is started on:', tcp_address)
 
     while True:
         try:
@@ -337,12 +340,29 @@ def handle_requests(socket, plate_client_socket):
                         predictions.append(dict(zip(tags, [p.name, str(p.score)])))
 
                     # If we are very sure about the found car's model, try to find its plate as well
-                    plate = ""
-                    if float(predictions[0]["score"]) > 0.75:
-                        plate = query_plate(plate_client_socket, original_cropped_img)
+                    found_plate = ""
+                    if use_plate_recognition and float(predictions[0]["score"]) > 0.75:
+                        results = alpr.recognize_array(bytes(cv2.imencode('.jpg', original_cropped_img)[1]))
+                        # print("Results: ", results)
+
+                        filtered_candidates = []
+                        for i, plate in enumerate(results['results']):
+                            for candidate in plate['candidates']:
+                                # print(candidate['plate'])
+                                # If our regex does not match with a plate, then it is a good candidate
+                                if not invalid_plate_pattern.search(candidate['plate']):
+                                    filtered_candidates.append(candidate['plate'])
+                            # WARNING: It is assumed that there is only a single plate in the given image
+                            # Hence, we break after the first plate, even if there are more plates
+                            break
+
+                        # print(filtered_candidates)
+                        if len(filtered_candidates) > 0:
+                            found_plate = filtered_candidates[0]
+
                         # print("Received plate: ", plate)
-                        if plate != "":
-                            predictions[0]["model"] = predictions[0]["model"] + "_" + plate
+                        if found_plate != "":
+                            predictions[0]["model"] = predictions[0]["model"] + "_" + found_plate
 
                     cl = {
                         'label' : o['label'],
@@ -370,10 +390,7 @@ if __name__ == '__main__':
     try:
         tcp_address = car_conf.get_tcp_address(car_conf.crcl["host"], car_conf.crcl["port"])
         socket = init_server(tcp_address)
-        plate_tcp_address = plate_conf.get_tcp_address(plate_conf.server["host"], plate_conf.server["port"])
-        plate_client_socket = init_client(plate_tcp_address)
-        print('Server is started on:', tcp_address)
-        handle_requests(socket, plate_client_socket)
+        handle_requests(socket)
     except Exception as e:
         print(str(e))
     finally:

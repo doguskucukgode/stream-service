@@ -1,4 +1,4 @@
-# External imports
+# External configs
 import io
 import zmq
 import sys
@@ -17,7 +17,7 @@ from random import randint
 from subprocess import Popen, PIPE
 import random
 
-# Internal imports
+# Internal configs
 import service_config as serv_conf
 
 STREAM_SERVER_WOWZA = "wowza"
