@@ -61,7 +61,7 @@ def handle_requests(socket, alpr):
     while True:
         result_dict = {}
         message = "OK"
-        found_plate = "-"
+        found_plate = ""
 
         try:
             # Get image from socket
@@ -69,12 +69,10 @@ def handle_requests(socket, alpr):
             image = decode_request(request)
             # results = alpr.recognize_file("/home/taylan/gitFolder/stream-service/received_by_plate.jpg")
             results = alpr.recognize_array(image)
-            print("Results: ", results)
+            # print("Results: ", results)
 
             filtered_candidates = []
             for i, plate in enumerate(results['results']):
-                # print("Plate #%d" % i)
-                # print("   %12s %12s" % ("Plate", "Confidence"))
                 for candidate in plate['candidates']:
                     print(candidate['plate'])
                     # If our regex does not match with a plate, then it is a good candidate

@@ -1,3 +1,4 @@
+# External imports
 import io
 import os
 import cv2
@@ -7,7 +8,6 @@ from zmq.decorators import context, socket
 import uuid
 import json
 import base64
-import car_conf
 import operator
 import numpy as np
 from PIL import Image
@@ -15,6 +15,10 @@ import tensorflow as tf
 from keras.models import load_model
 from keras.preprocessing import image
 import keras.backend.tensorflow_backend as K
+
+# Internal imports
+import car_conf
+import plate_conf
 
 
 current_dir = os.path.dirname(os.path.realpath(__file__))
@@ -221,6 +225,16 @@ def init_server(address):
         raise Exception(message)
 
 
+def init_client(address):
+    try:
+        context = zmq.Context()
+        socket = context.socket(zmq.REQ)
+        socket.connect(address)
+        return socket
+    except Exception as e:
+        print ("Could not initialize the client: " + str(e))
+
+
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -252,7 +266,19 @@ def crop_image(image, topleft, bottomright, confidence):
     return None
 
 
-def handle_requests(socket):
+def query_plate(plate_client_socket, cropped_original):
+    encoded_img = cv2.imencode(".jpg", cropped_original)[1]
+    encoded_img = base64.b64encode(encoded_img)
+    plate_client_socket.send(encoded_img)
+    plate_message = plate_client_socket.recv()
+    received_json = json.loads(plate_message.decode("utf-8"))
+    plate = ""
+    if received_json["message"] == "OK":
+        plate = received_json["result"]
+    return plate
+
+
+def handle_requests(socket, plate_client_socket):
     # Load SSD model
     ssd_model = load_SSD_model()
 
@@ -288,6 +314,9 @@ def handle_requests(socket):
                     if cropped is None:
                         continue
 
+                    # Save a copy for plate recognition
+                    original_cropped_img = cropped
+
                     # cv2.imwrite('/home/taylan/Desktop/res/' + str(uuid.uuid4()) + '.jpg', cropped)
                     # Preprocess the image
                     cropped = cropped * 1./255
@@ -307,8 +336,16 @@ def handle_requests(socket):
                     for index, p in enumerate(predict_list):
                         predictions.append(dict(zip(tags, [p.name, str(p.score)])))
 
+                    # If we are very sure about the found car's model, try to find its plate as well
+                    plate = ""
+                    if float(predictions[0]["score"]) > 0.75:
+                        plate = query_plate(plate_client_socket, original_cropped_img)
+                        # print("Received plate: ", plate)
+
+                    label_to_send = o['label'] if plate == "" else o['label'] + "_" + plate
+
                     cl = {
-                        'label' : o['label'],
+                        'label' : label_to_send,
                         'confidence' : o['confidence'],
                         'topleft' : o['topleft'],
                         'bottomright' : o['bottomright'],
@@ -333,8 +370,10 @@ if __name__ == '__main__':
     try:
         tcp_address = car_conf.get_tcp_address(car_conf.crcl["host"], car_conf.crcl["port"])
         socket = init_server(tcp_address)
+        plate_tcp_address = plate_conf.get_tcp_address(plate_conf.server["host"], plate_conf.server["port"])
+        plate_client_socket = init_client(plate_tcp_address)
         print('Server is started on:', tcp_address)
-        handle_requests(socket)
+        handle_requests(socket, plate_client_socket)
     except Exception as e:
         print(str(e))
     finally:
