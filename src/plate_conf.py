@@ -20,5 +20,5 @@ recognition = {
     "openalpr_conf_dir" : SOURCE_FOLDER + "/" + "openalpr.conf",
     "openalpr_runtime_data_dir" : BASE_FOLDER + "/openalpr-2.3.0/runtime_data",
     "top_n" : 30,
-    "invalid_tr_plate_regex" : '(^[A-Z])|(^[0-9]{3})|(Q|X|W)|([A-Z]$)|([A-Z].*[0-9].*[A-Z])'
+    "invalid_tr_plate_regex" : '^(?![0-7][0-9]|80|81).*|(^[A-Z])|(^[0-9]{3})|(Q|X|W)|([A-Z]$)|([A-Z].*[0-9].*[A-Z])'
 }
