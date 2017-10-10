@@ -66,8 +66,7 @@ class StreamProcess(multiprocessing.Process):
         print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
-        #p =  Popen(['ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
-        p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+        p =  Popen([serv_conf.service['ffmpeg_path'],'-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
