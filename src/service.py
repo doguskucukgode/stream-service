@@ -66,7 +66,7 @@ class StreamProcess(multiprocessing.Process):
         print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
-        p =  Popen([serv_conf.service['ffmpeg_path'],'-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+        p =  Popen([serv_conf.service['ffmpeg_path'], '-gpu', '0', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
@@ -100,15 +100,15 @@ class StreamProcess(multiprocessing.Process):
         time.sleep(serv_conf.stream["RECONNECT_TIME_OUT"])
         if tryCount == serv_conf.stream["RECONNECT_TRY_COUNT"]:
             end_loop = True
-            return tryCount, None, True
+            return tryCount, None, None, True
         else:
             p.stdin.close()
             p.wait()
             print("Reconnecting stream " + self.read_url + "...")
             cap = cv2.VideoCapture(self.read_url)
             print("Video Capture reinitialized " + self.read_url)
-            p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
-            #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+            #p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-gpu','0','-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
+            p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
             print("Popen reinitialized")
             tryCount = tryCount + 1
             return tryCount, cap, p, False
