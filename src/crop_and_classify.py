@@ -341,11 +341,11 @@ def handle_requests(socket, plate_client_socket):
                     if float(predictions[0]["score"]) > 0.75:
                         plate = query_plate(plate_client_socket, original_cropped_img)
                         # print("Received plate: ", plate)
-
-                    label_to_send = o['label'] if plate == "" else o['label'] + "_" + plate
+                        if plate != "":
+                            predictions[0]["model"] = predictions[0]["model"] + "_" + plate
 
                     cl = {
-                        'label' : label_to_send,
+                        'label' : o['label'],
                         'confidence' : o['confidence'],
                         'topleft' : o['topleft'],
                         'bottomright' : o['bottomright'],

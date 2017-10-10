@@ -74,7 +74,7 @@ def handle_requests(socket, alpr):
             filtered_candidates = []
             for i, plate in enumerate(results['results']):
                 for candidate in plate['candidates']:
-                    print(candidate['plate'])
+                    # print(candidate['plate'])
                     # If our regex does not match with a plate, then it is a good candidate
                     if not invalid_plate_pattern.search(candidate['plate']):
                         filtered_candidates.append(candidate['plate'])
