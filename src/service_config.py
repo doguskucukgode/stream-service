@@ -30,8 +30,8 @@ actions = {
 stream = {
     "TYPE_CAR_CLASSIFICATION" : 2,
     "TYPE_FACE_DETECTION" : 1,
-    "INTERVAL" : 8,
-    "COPY_COUNT" : 5,
+    "INTERVAL" : 12,
+    "COPY_COUNT" : 10,
     "RECONNECT_TIME_OUT" : 5,
     "RECONNECT_TRY_COUNT" : 5
 }
