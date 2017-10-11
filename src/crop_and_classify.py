@@ -360,16 +360,13 @@ def handle_requests(socket):
                         if len(filtered_candidates) > 0:
                             found_plate = filtered_candidates[0]
 
-                        # print("Received plate: ", plate)
-                        if found_plate != "":
-                            predictions[0]["model"] = predictions[0]["model"] + "_" + found_plate
-
                     cl = {
                         'label' : o['label'],
                         'confidence' : o['confidence'],
                         'topleft' : o['topleft'],
                         'bottomright' : o['bottomright'],
-                        'predictions' : predictions
+                        'predictions' : predictions,
+                        'plate' : found_plate
                     }
                     clasifications.append(cl)
 
