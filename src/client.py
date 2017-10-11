@@ -93,7 +93,7 @@ def annotate_crcl(image, message, out_path):
                 cv2.rectangle(
                     image,
                     (int(topleft['x']), int(topleft['y'])),
-                    (int(topleft['x']) + 120, int(topleft['y'] + 50)),
+                    (int(topleft['x']) + 130, int(topleft['y'] + 50)),
                     (255, 255, 255),
                     cv2.FILLED
                 )
