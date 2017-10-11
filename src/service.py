@@ -198,6 +198,25 @@ class StreamProcess(multiprocessing.Process):
                     topleft = res['topleft']
                     bottomright = res['bottomright']
 
+                    plate = res['plate']
+                    if plate != "":
+                        predictions[0]['model'] = predictions[0]['model'] + "_" + plate
+                        # plate_x = int(topleft['x']) + 10
+                        # plate_y = int(topleft['y']) + 30
+                        # cv2.rectangle(
+                        #     image,
+                        #     (int(topleft['x']), int(topleft['y'])),
+                        #     (int(topleft['x']) + 120, int(topleft['y'] + 50)),
+                        #     (255, 255, 255),
+                        #     cv2.FILLED
+                        # )
+                        #
+                        # cv2.putText(image, plate, (plate_x, plate_y),
+                        #     cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+                        #     (0, 0, 0), 2, cv2.LINE_AA
+                        # )
+
+
                     cv2.rectangle(
                         image,
                         (int(topleft['x']), int(topleft['y'])),
@@ -206,7 +225,7 @@ class StreamProcess(multiprocessing.Process):
                         4
                     )
 
-                    text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
+                    text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
                     text_x = int(topleft['x']) + 5
                     text_y = int(bottomright['y']) - 10
                     cv2.putText(image, text, (text_x, text_y),
@@ -214,23 +233,6 @@ class StreamProcess(multiprocessing.Process):
                         #(220, 220, 220),
                         color, 2, cv2.LINE_AA
                     )
-
-                    plate = res['plate']
-                    if plate != "":
-                        plate_x = int(topleft['x']) + 10
-                        plate_y = int(topleft['y']) + 30
-                        cv2.rectangle(
-                            image,
-                            (int(topleft['x']), int(topleft['y'])),
-                            (int(topleft['x']) + 120, int(topleft['y'] + 50)),
-                            (255, 255, 255),
-                            cv2.FILLED
-                        )
-
-                        cv2.putText(image, plate, (plate_x, plate_y),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                            (0, 0, 0), 2, cv2.LINE_AA
-                        )
 
         except Exception as e:
             print ("Could not annotate the given image.")
