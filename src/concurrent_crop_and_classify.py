@@ -7,6 +7,7 @@ import sys
 import zmq
 import uuid
 import json
+import copy
 import base64
 import operator
 import numpy as np
@@ -54,6 +55,10 @@ net_shape = (0, 0)
 net_to_use = car_conf.cropper['ssd-net']
 ckpt_filename = car_conf.cropper['ssd-model-path']
 net_shape = (300, 300) if net_to_use == 'ssd-300' else (512, 512)
+
+# Global variables required by openALPR
+alpr = None
+invalid_plate_pattern = None
 
 
 class SSD_Bundle:
@@ -258,14 +263,16 @@ def crop_image(image, topleft, bottomright, confidence):
     return None
 
 
-def extract_plate():
+def extract_plate(cropped):
+    global alpr
+    global invalid_plate_pattern
     # print("Entered plate")
     found_plate = ""
-    results = alpr.recognize_array(bytes(cv2.imencode('.jpg', original_cropped_img)[1]))
+    results = alpr.recognize_array(bytes(cv2.imencode('.jpg', cropped)[1]))
     # print("Results: ", results)
 
     filtered_candidates = []
-    for i, plate in enumerate(results['results']):
+    for plate in results['results']:
         for candidate in plate['candidates']:
             # print(candidate['plate'])
             # If our regex does not match with a plate, then it is a good candidate
@@ -284,6 +291,9 @@ def extract_plate():
 
 
 def handle_requests(socket):
+    global alpr
+    global invalid_plate_pattern
+
     # Load SSD model
     ssd_model = load_SSD_model()
 
@@ -311,10 +321,8 @@ def handle_requests(socket):
 
         # Compile regex that matches with invalid TR plates
         invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
-        global invalid_plate_pattern
         invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
 
-        global alpr
         alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
         if not alpr.is_loaded():
             print("Error loading OpenALPR")
@@ -348,10 +356,6 @@ def handle_requests(socket):
                     if cropped is None:
                         continue
 
-                    # Plate recognition uses this original version of cropped part of the image
-                    global original_cropped_img
-                    original_cropped_img = cropped
-
                     # cv2.imwrite('/home/taylan/Desktop/res/' + str(uuid.uuid4()) + '.jpg', cropped)
                     found_plate = ""
                     predictions = []
@@ -360,7 +364,7 @@ def handle_requests(socket):
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
                     if use_plate_recognition:
-                        future1 = executor.submit(extract_plate)
+                        future1 = executor.submit(extract_plate, cropped)
 
                     # Preprocess the image
                     cropped = cropped * 1./255
