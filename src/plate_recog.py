@@ -4,13 +4,35 @@ import re
 import sys
 import cv2
 import zmq
+import uuid
 import json
 import base64
+import itertools
 import numpy as np
-from openalpr import Alpr
+
+import keras
+from keras import backend as K
+from keras.models import Model, load_model
 
 # Internal imports
 import plate_conf
+
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
+current_dir = os.path.dirname(os.path.realpath(__file__))
+base_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
+
+tf_config = K.tf.ConfigProto()
+tf_config.gpu_options.allow_growth = True
+tf_config.gpu_options.per_process_gpu_memory_fraction = 0.8
+sess = K.tf.Session(config=tf_config)
+K.set_session(sess)
+
+alphabet = {
+    0: '0',  1: '1',  2: '2',  3: '3',  4: '4',  5: '5',  6: '6',  7: '7',  8: '8',  9: '9',
+    10: 'A',  11: 'B',  12: 'C',  13: 'D',  14: 'E',  15: 'F',  16: 'G',  17: 'H',  18: 'I',
+    19: 'J',  20: 'K',  21: 'L',  22: 'M',  23: 'N',  24: 'O',  25: 'P',  26: 'R',  27: 'S',
+    28: 'T',  29: 'U',  30: 'V',  31: 'Y',  32: 'Z',  33: ' '
+}
 
 
 def init_server(address):
@@ -29,85 +51,144 @@ def init_server(address):
 def decode_request(request):
     try:
         img = base64.b64decode(request)
-        # OpenALPR requires byte array
-        return bytes(img)
+        nparr = np.fromstring(img, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        return img
     except Exception as e:
         message = "Could not decode the received request."
         print(message + str(e))
         raise Exception(message)
 
 
-def handle_requests(socket, alpr):
-    # Load configs and Alpr() once
-    country = plate_conf.recognition['country']
-    region = plate_conf.recognition['region']
-    openalpr_conf_dir = plate_conf.recognition['openalpr_conf_dir']
-    openalpr_runtime_data_dir = plate_conf.recognition['openalpr_runtime_data_dir']
-    top_n = plate_conf.recognition['top_n']
+# For a real OCR application, this should be beam search with a dictionary
+# and language model.  For this example, best path is sufficient.
+def decode_batch(out):
+    ret = []
+    for j in range(out.shape[0]):
+        out_best = list(np.argmax(out[j, 2:], 1))
+
+        out_str_wo_gb = ''
+        for c in out_best:
+            if c < len(alphabet):
+                out_str_wo_gb = out_str_wo_gb + alphabet[c] + '.'
+        # print(out_str_wo_gb)
+
+        out_best = [k for k, g in itertools.groupby(out_best)]
+        outstr = ''
+        for c in out_best:
+            if c < len(alphabet):
+                outstr += alphabet[c]
+        ret.append(outstr)
+    return ret
+
+
+def almost_equal(w1, w2):
+    if len(w1) != len(w2):
+        return False
+    else:
+        count = 0
+        for a, b in zip(w1, w2):
+            if a != b :
+                count += 1
+            if count == 2:
+                return False
+        else:
+            return True
+
+
+def detect_plates(plate_classifier, iteration_inc, strictness, img):
+    plates = plate_classifier.detectMultiScale(img, iteration_inc, strictness)
+    # print("Found plates: ", plates)
+    return plates
+
+
+def handle_requests(socket, plate_recognizer):
+    # Load recognition related configs
+    image_width = plate_conf.recognition["image_width"]
+    image_height = plate_conf.recognition["image_height"]
 
     # Compile regex that matches with invalid TR plates
     invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
     invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
-
-    alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
-    if not alpr.is_loaded():
-        print("Error loading OpenALPR")
-        return
-
-    alpr.set_top_n(top_n)
-    alpr.set_default_region(region)
     print("Plate recognition is started on: ", tcp_address)
+
+    net_inp = plate_recognizer.get_layer(name='the_input').input
+    net_out = plate_recognizer.get_layer(name='softmax').output
 
     while True:
         result_dict = {}
         message = "OK"
         found_plate = ""
+        topleft = {}
+        bottomright = {}
+        coord_info = {}
 
         try:
-            # Get image from socket
+            # Get image from socket and perform detection
             request = socket.recv()
             image = decode_request(request)
-            # results = alpr.recognize_file("/home/taylan/gitFolder/stream-service/received_by_plate.jpg")
-            results = alpr.recognize_array(image)
-            # print("Results: ", results)
 
-            filtered_candidates = []
-            for i, plate in enumerate(results['results']):
-                for candidate in plate['candidates']:
-                    # print(candidate['plate'])
-                    # If our regex does not match with a plate, then it is a good candidate
-                    if not invalid_plate_pattern.search(candidate['plate']):
-                        filtered_candidates.append(candidate['plate'])
-                # WARNING: It is assumed that there is only a single plate in the given image
-                # Hence, we break after the first plate, even if there are more plates
-                break
+            # Feeding a single image at a time
+            imgs = np.zeros((1, image_height, image_width))
+            X_data = np.ones([1, image_width, image_height, 1])
 
-            # print(filtered_candidates)
-            if len(filtered_candidates) > 0:
-                found_plate = filtered_candidates[0]
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            gray = cv2.resize(gray, (image_width, image_height))
+            gray = gray.astype(np.float32)
+            gray /= 255
+
+            # width and height are backwards from typical Keras convention
+            # because width is the time dimension when it gets fed into the RNN
+            imgs[0, :, :] = gray
+
+            img = imgs[0]
+            img = img.T
+            if K.image_data_format() == 'channels_first':
+                img = np.expand_dims(img, 0)
+            else:
+                img = np.expand_dims(img, -1)
+
+            X_data[0] = img
+            net_out_value = sess.run(net_out, feed_dict={net_inp:X_data})
+            pred_texts = decode_batch(net_out_value)
+            if len(pred_texts) > 0:
+                found_plate = pred_texts[0]
 
         except Exception as e:
             message = str(e)
 
-        result_dict["result"] = found_plate
+        all_info = {}
+        all_info["plate"] = found_plate
+        all_info["coords"] = coord_info
+        result_dict["result"] = [all_info]
         result_dict["message"] = message
+        # print(result_dict)
         socket.send_json(result_dict)
 
 
 if __name__ == '__main__':
     socket = None
-    alpr = None
+    plate_recognizer = None
+
+    # Load plate recognizer once
+    model_path = plate_conf.recognition['model_path']
     try:
-        tcp_address = plate_conf.get_tcp_address(plate_conf.server["host"], plate_conf.server["port"])
+        print("Loading model: ", model_path)
+        plate_recognizer = load_model(model_path, compile=False)
+    except Exception as e:
+        exception_info = str(e)
+        print("Error while loading plate recognizer: " + exception_info)
+        sys.exit()
+
+    try:
+        host = plate_conf.recognizer_server['host']
+        port = plate_conf.recognizer_server['port']
+        tcp_address = plate_conf.get_tcp_address(host, port)
         socket = init_server(tcp_address)
-        handle_requests(socket, alpr)
+        handle_requests(socket, plate_recognizer)
     except Exception as e:
         print(str(e))
     finally:
         if socket is not None:
             print("Socket closed properly.")
             socket.close()
-        if alpr is not None:
-            # Call when completely done to release memory
-            alpr.unload()
-            print("ALPR unloaded properly.")
