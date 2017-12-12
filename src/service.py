@@ -66,7 +66,8 @@ class StreamProcess(multiprocessing.Process):
         print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
-        p =  Popen([serv_conf.service['ffmpeg_path'], '-gpu', '0', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+        #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+        p =  Popen([serv_conf.service['ffmpeg_path'], '-gpu', '1', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
@@ -198,9 +199,21 @@ class StreamProcess(multiprocessing.Process):
                     topleft = res['topleft']
                     bottomright = res['bottomright']
 
+                    cv2.rectangle(
+                        image,
+                        (int(topleft['x']), int(topleft['y'])),
+                        (int(bottomright['x']), int(bottomright['y'])),
+                        color,
+                        4
+                    )
+
                     plate = res['plate']
                     if plate != "":
-                        predictions[0]['model'] = predictions[0]['model'] + "_" + plate
+                        text = predictions[0]['model'] + "_" + plate + ' - ' + str(predictions[0]['score'])
+                    else:
+                        text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
+                    #if plate != "":
+                        #predictions[0]['model'] = predictions[0]['model'] + "_" + plate
                         # plate_x = int(topleft['x']) + 10
                         # plate_y = int(topleft['y']) + 30
                         # cv2.rectangle(
@@ -216,16 +229,6 @@ class StreamProcess(multiprocessing.Process):
                         #     (0, 0, 0), 2, cv2.LINE_AA
                         # )
 
-
-                    cv2.rectangle(
-                        image,
-                        (int(topleft['x']), int(topleft['y'])),
-                        (int(bottomright['x']), int(bottomright['y'])),
-                        color,
-                        4
-                    )
-
-                    text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
                     text_x = int(topleft['x']) + 5
                     text_y = int(bottomright['y']) - 10
                     cv2.putText(image, text, (text_x, text_y),

@@ -36,7 +36,7 @@ def read_image_new(path):
 
 
 def annotate(image, message, out_path):
-    results = json.loads(message.decode("utf-8"))['result']
+    results = message['result']
     for res in results:
         topleft = res['topleft']
         bottomright = res['bottomright']
@@ -103,13 +103,12 @@ def annotate_crcl(image, message, out_path):
                     (0, 0, 0), 2, cv2.LINE_AA
                 )
 
-
     cv2.imwrite(out_path + '/result.jpg', image)
     print("Annotated image is written to: " + out_path + '/result.jpg')
 
 
 def annotate_face(image, message, out_path):
-    results = json.loads(message.decode("utf-8"))['result']
+    results = message['result']
     for res in results:
         topleft = res['topleft']
         bottomright = res['bottomright']
@@ -144,12 +143,12 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "54321"
+    port = "54445"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_path = "/home/taylan/Desktop/car_images/havas.jpg"
-    # input_path = '/home/taylan/w_Python/oguzhan_face/Face/train/Alejandro_Toledo_0028.jpg'
+    #input_path = "/home/taylan/Desktop/car_images/havas.jpg"
+    input_path = "/home/dogus/git/stream-service/do2.jpg"
 
     image = cv2.imread(input_path, 1)
     # encoded_img = read_image_base64(input_path)
@@ -159,7 +158,7 @@ if __name__ == '__main__':
 
     print ("Sending request..")
     socket.send(encoded_img)
-    message = socket.recv()
+    message = socket.recv_json()
     print ("Received reply: ", message)
 
     # WARNING: annotate works for cropper only, do not use it with classifier
@@ -167,7 +166,7 @@ if __name__ == '__main__':
     # use annotate_crcl() for cropper and classifier
     # use annotate_face() for face recog
     try:
-        annotate_crcl(image, message, current_dir)
+        annotate_face(image, message, current_dir)
     except Exception as e:
         print ("Could not annotate the given image.")
         print(e)
