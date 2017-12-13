@@ -127,28 +127,19 @@ def handle_requests(socket, plate_recognizer):
             # Get image from socket and perform detection
             request = socket.recv()
             image = decode_request(request)
-
-            # Feeding a single image at a time
-            imgs = np.zeros((1, image_height, image_width))
-            X_data = np.ones([1, image_width, image_height, 1])
-
             gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
             gray = cv2.resize(gray, (image_width, image_height))
             gray = gray.astype(np.float32)
             gray /= 255
-
             # width and height are backwards from typical Keras convention
             # because width is the time dimension when it gets fed into the RNN
-            imgs[0, :, :] = gray
+            gray = gray.T   # (128, 32)
+            gray = np.expand_dims(gray, -1) # (128, 32, 1)
 
-            img = imgs[0]
-            img = img.T
-            if K.image_data_format() == 'channels_first':
-                img = np.expand_dims(img, 0)
-            else:
-                img = np.expand_dims(img, -1)
-
-            X_data[0] = img
+            # Feeding a single image at a time: (1, image_width, image_height, 1)
+            # Otherwise X_data should be of shape: (n, image_width, image_height, 1)
+            X_data = np.ones([1, image_width, image_height, 1])
+            X_data[0] = gray
             net_out_value = sess.run(net_out, feed_dict={net_inp:X_data})
             pred_texts = decode_batch(net_out_value)
             if len(pred_texts) > 0:
