@@ -27,7 +27,8 @@ def decode_request(request):
     try:
         img = base64.b64decode(request)
         nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
+        # print("Decoding done.")
         return img
     except Exception as e:
         message = "Could not decode the received request."
@@ -58,8 +59,13 @@ def handle_requests(socket, plate_detector):
             # Get image from socket and perform detection
             request = socket.recv()
             image = decode_request(request)
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            plate_coords = detect_plates(plate_detector, iteration_inc, strictness, gray)
+            #TODO: check len of shape it must be three
+            # Do not attempt manipulating image if it is already grayscale
+            if image.shape[2] != 1:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            plate_coords = detect_plates(plate_detector, iteration_inc, strictness, image)
+            print("Plate coords: ", plate_coords)
             if len(plate_coords) > 0:
                 for (x, y, w, h) in plate_coords:
                     topleft["x"] = int(x)

@@ -52,7 +52,7 @@ def decode_request(request):
     try:
         img = base64.b64decode(request)
         nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
         return img
     except Exception as e:
         message = "Could not decode the received request."
@@ -127,19 +127,22 @@ def handle_requests(socket, plate_recognizer):
             # Get image from socket and perform detection
             request = socket.recv()
             image = decode_request(request)
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            gray = cv2.resize(gray, (image_width, image_height))
-            gray = gray.astype(np.float32)
-            gray /= 255
+            #TODO: check len of shape it must be three
+            # Do not attempt manipulating image if it is already grayscale
+            if image.shape[2] != 1:
+                image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+            image = cv2.resize(image, (image_width, image_height))
+            image = image.astype(np.float32)
+            image /= 255
             # width and height are backwards from typical Keras convention
             # because width is the time dimension when it gets fed into the RNN
-            gray = gray.T   # (128, 32)
-            gray = np.expand_dims(gray, -1) # (128, 32, 1)
+            image = image.T   # (128, 32)
+            image = np.expand_dims(image, -1) # (128, 32, 1)
 
             # Feeding a single image at a time: (1, image_width, image_height, 1)
             # Otherwise X_data should be of shape: (n, image_width, image_height, 1)
             X_data = np.ones([1, image_width, image_height, 1])
-            X_data[0] = gray
+            X_data[0] = image
             net_out_value = sess.run(net_out, feed_dict={net_inp:X_data})
             pred_texts = decode_batch(net_out_value)
             if len(pred_texts) > 0:
