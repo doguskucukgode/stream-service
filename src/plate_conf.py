@@ -25,7 +25,7 @@ detection = {
     # The minimum detection strength determines how sure the detection algorithm must be before signaling that
     # a plate region exists.  Technically this corresponds to LBP nearest neighbors (e.g., how many detections
     # are clustered around the same area).  For example, 2 = very lenient, 9 = very strict.
-    "detection_strictness" : 6,
+    "detection_strictness" : 3,
 
     # detection_iteration_increase is the percentage that the LBP frame increases each iteration.
     # It must be greater than 1.0.  A value of 1.01 means increase by 1%, 1.10 increases it by 10% each time.
@@ -36,6 +36,13 @@ detection = {
 }
 
 recognition = {
+    # OpenALPR related configs
+    "country" : "eu",
+    "region" : "tr",
+    "openalpr_conf_dir" : SOURCE_FOLDER + "/" + "openalpr.conf",
+    "openalpr_runtime_data_dir" : BASE_FOLDER + "/openalpr-2.3.0/runtime_data",
+    "top_n" : 30,
+
     "model_path" : BASE_FOLDER + "/model/" + "plate-recog-loss-rms-0.10.hdf5",
 
     # Default image width and height. Given images will be resized to these values and the fed to the network
