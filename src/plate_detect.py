@@ -65,7 +65,7 @@ def handle_requests(socket, plate_detector):
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
             plate_coords = detect_plates(plate_detector, iteration_inc, strictness, image)
-            print("Plate coords: ", plate_coords)
+            # print("Plate coords: ", plate_coords)
             if len(plate_coords) > 0:
                 for (x, y, w, h) in plate_coords:
                     topleft["x"] = int(x)
