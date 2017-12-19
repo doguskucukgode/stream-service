@@ -1,4 +1,4 @@
-# External configs
+# External imports
 import io
 import zmq
 import sys
@@ -17,7 +17,8 @@ from random import randint
 from subprocess import Popen, PIPE
 import random
 
-# Internal configs
+# Internal imports
+import car_conf
 import service_config as serv_conf
 
 STREAM_SERVER_WOWZA = "wowza"
@@ -191,7 +192,8 @@ class StreamProcess(multiprocessing.Process):
                 label = res['label']
                 confidence = float(res['confidence'])
                 predictions = res['predictions']
-                if confidence > 0.5 and float(predictions[0]['score']) > 0.75:
+                if confidence > car_conf.crop_values['min_confidence'] and\
+                    float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
                     #color = (220, 152, 52)
                     if predictions[0]['model'] not in self.color_map:
                         self.color_map[predictions[0]['model']] = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
