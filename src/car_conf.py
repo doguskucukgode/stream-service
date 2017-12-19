@@ -21,7 +21,7 @@ cropper = {
 
 
 crop_values = {
-    "min_confidence" : 0.5,
+    "min_confidence" : 0.65,
     "x_margin_percentage" : 0.2,
     "y_margin_percentage" : 0.1
 }
@@ -39,7 +39,8 @@ classifier = {
     "classes_json" : "classes.json",
     # First n predictions will be returned as result
     "n" : 5,
-    "gpu_memory_frac" : 0.2
+    "gpu_memory_frac" : 0.2,
+    "min_confidence" : 0.75
 }
 
 training = {
