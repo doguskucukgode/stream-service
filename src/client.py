@@ -1,3 +1,4 @@
+# External imports
 import os
 import cv2
 import zmq
@@ -5,6 +6,8 @@ import json
 import base64
 import face_conf
 
+# Internal imports
+import car_conf
 
 def init_client(address):
     try:
@@ -66,11 +69,13 @@ def annotate(image, message, out_path):
 
 
 def annotate_crcl(image, message, out_path):
-    results = json.loads(message.decode("utf-8"))['result']
+    results = message['result']
     for res in results:
         label = res['label']
         confidence = float(res['confidence'])
-        if confidence > 0.5:
+        predictions = res['predictions']
+        if confidence > car_conf.crop_values['min_confidence'] and\
+            float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
             topleft = res['topleft']
             bottomright = res['bottomright']
 
@@ -81,7 +86,6 @@ def annotate_crcl(image, message, out_path):
                 (255, 255, 255)
             )
 
-            predictions = res['predictions']
             text = str(predictions[0]['model']) + ' - ' + str(predictions[0]['score'])
             text_x = int(topleft['x'])
             text_y = int(topleft['y']) - 10
@@ -143,12 +147,12 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "54445"
+    port = "54321"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    #input_path = "/home/taylan/Desktop/car_images/havas.jpg"
-    input_path = "/home/dogus/git/stream-service/do2.jpg"
+    input_path = "/home/taylan/Desktop/car_images/raw/dogus.png"
+    # input_path = "/home/dogus/git/stream-service/do2.jpg"
 
     image = cv2.imread(input_path, 1)
     # encoded_img = read_image_base64(input_path)
@@ -166,7 +170,7 @@ if __name__ == '__main__':
     # use annotate_crcl() for cropper and classifier
     # use annotate_face() for face recog
     try:
-        annotate_face(image, message, current_dir)
+        annotate_crcl(image, message, current_dir)
     except Exception as e:
         print ("Could not annotate the given image.")
         print(e)
