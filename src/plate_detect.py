@@ -50,10 +50,6 @@ def handle_requests(socket, plate_detector):
     while True:
         result_dict = {}
         message = "OK"
-        found_plate = ""
-        topleft = {}
-        bottomright = {}
-        coord_info = {}
 
         try:
             # Get image from socket and perform detection
@@ -65,26 +61,30 @@ def handle_requests(socket, plate_detector):
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
             plate_coords = detect_plates(plate_detector, iteration_inc, strictness, image)
-            # print("Plate coords: ", plate_coords)
-            if len(plate_coords) > 0:
-                for (x, y, w, h) in plate_coords:
-                    topleft["x"] = int(x)
-                    topleft["y"] = int(y)
-                    bottomright["x"] = int(x + w)
-                    bottomright["y"] = int(y + h)
-                    coord_info["topleft"] = topleft
-                    coord_info["bottomright"] = bottomright
-                    found_plate = "FOUND"
-                    # Just sends the first result for the time being
-                    break
+            all_detected_plates = []
+            for (x, y, w, h) in plate_coords:
+                topleft = {}
+                bottomright = {}
+                coord_info = {}
+
+                topleft["x"] = int(x)
+                topleft["y"] = int(y)
+                bottomright["x"] = int(x + w)
+                bottomright["y"] = int(y + h)
+                coord_info["topleft"] = topleft
+                coord_info["bottomright"] = bottomright
+
+                detected = {}
+                detected["coords"] = coord_info
+                detected["area"] = int(w * h)
+                all_detected_plates.append(detected)
 
         except Exception as e:
             message = str(e)
 
-        all_info = {}
-        all_info["plate"] = found_plate
-        all_info["coords"] = coord_info
-        result_dict["result"] = [all_info]
+
+        all_detected_plates = sorted(all_detected_plates, key=lambda detected: detected["area"], reverse=True)
+        result_dict["result"] = all_detected_plates
         result_dict["message"] = message
         # print(result_dict)
         socket.send_json(result_dict)

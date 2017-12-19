@@ -295,47 +295,52 @@ def extract_plate(cropped, is_initialized):
     if detector_reply['message'] != "OK":
         return found_plate, is_initialized
 
-    #TODO: Just using a single plate
-    detector_results = detector_reply['result'][0]
+    detector_results = detector_reply['result']
     print("Detector results: ", detector_results)
-    coord_info = detector_results['coords']
-    print("Coords: ", coord_info)
-    # If coordinate info is empty, return empty plate since we could not found any plates
-    if not coord_info:
-        print("Coord info is empty, could not find any plates..")
-        return found_plate, is_initialized
 
-    # Crop the plate out of the car image
-    #TODO: Add margin logic here
-    topleft_x = int(coord_info['topleft']['x'])
-    topleft_y = int(coord_info['topleft']['y'])
-    bottomright_x = int(coord_info['bottomright']['x'])
-    bottomright_y = int(coord_info['bottomright']['y'])
-    width = int(bottomright_x - topleft_x)
-    height = int(bottomright_y - topleft_y)
-    margin_width = int(height / 2)
-    margin_height = int(height / 4)
+    for detected_plate in detector_results:
+        coord_info = detected_plate['coords']
+        print("Coords: ", coord_info)
+        # If coordinate info is empty, return empty plate since we could not found any plates
+        if not coord_info:
+            print("Coord info is empty, could not find any plates..")
+            return found_plate, is_initialized
 
-    topleft_x -= margin_width
-    topleft_y -= margin_height
-    bottomright_x += margin_width
-    bottomright_y += margin_height
+        # Crop the plate out of the car image
+        topleft_x = int(coord_info['topleft']['x'])
+        topleft_y = int(coord_info['topleft']['y'])
+        bottomright_x = int(coord_info['bottomright']['x'])
+        bottomright_y = int(coord_info['bottomright']['y'])
+        width = int(bottomright_x - topleft_x)
+        height = int(bottomright_y - topleft_y)
+        margin_width = int(height / 2)
+        margin_height = int(height / 4)
 
-    cropped_plate_img = cropped[topleft_y:bottomright_y, topleft_x:bottomright_x]
+        # Add margins
+        topleft_x -= margin_width
+        topleft_y -= margin_height
+        bottomright_x += margin_width
+        bottomright_y += margin_height
+        # Crop the detected plate
+        cropped_plate_img = cropped[topleft_y:bottomright_y, topleft_x:bottomright_x]
+        # Recognize the cropped plate image
+        cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
+        encoded_plate_img = base64.b64encode(cv_encoded_plate_img)
+        extract_plate.plate_recog_client.send(encoded_plate_img)
+        recog_reply = extract_plate.plate_recog_client.recv()
+        recog_reply = json.loads(recog_reply.decode("utf-8"))
+        print(recog_reply)
 
-    cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
-    encoded_plate_img = base64.b64encode(cv_encoded_plate_img)
-    extract_plate.plate_recog_client.send(encoded_plate_img)
-    recog_reply = extract_plate.plate_recog_client.recv()
-    recog_reply = json.loads(recog_reply.decode("utf-8"))
-    print(recog_reply)
+        # If there is an error, just return an empty plate
+        if recog_reply["message"] != "OK":
+            print(recog_reply["message"])
+            continue
 
-    # If there is an error, just return an empty plate
-    if recog_reply["message"] != "OK":
-        return found_plate, is_initialized
+        plate_results = recog_reply['result'][0]
+        if plate_results['plate'] != '':
+            found_plate = plate_results['plate']
+            break
 
-    plate_results = recog_reply['result'][0]
-    found_plate = plate_results['plate']
     print(found_plate)
     print("Exiting plate extraction")
     return found_plate, is_initialized
