@@ -150,30 +150,6 @@ def classifyIndices(data, preds, n):
     return predValuesSorted
 
 
-# class PlateClient:
-#     """ A client class that connects to plate detection/recognition services """
-#     det_client = None
-#     recog_client = None
-#
-#     def __init__(self, det_host, det_port, recog_host, recog_port):
-#         self.det_address = plate_conf.get_tcp_address(det_host, det_port)
-#         self.recog_address = plate_conf.get_tcp_address(recog_host, recog_port)
-#         self.is_connected = False
-#
-#     def connect(self):
-#         self.det_client =
-#
-#     def detect_plate(self, image):
-#         pass
-#
-#     def recognize_plate(self, image):
-#         pass
-#
-#     def detect_and_recognize(self, image):
-#         detect_res = self.detect_plate(image)
-#         recog_res = self.recognize_plate(image)
-#
-
 # Load trained tensorflow model to classify cars
 def load_model_and_json():
     json_path = car_conf.crcl["model_folder"] + '/' + car_conf.crcl["classes_json"]
@@ -291,30 +267,33 @@ def crop_image(image, topleft, bottomright, confidence):
 
 
 #TODO: Add timeout logic here
-def extract_plate(cropped):
+def extract_plate(cropped, is_initialized):
     print("Entered plate extraction")
-    # Initialize zmq context and sockets
-    ctx = zmq.Context(io_threads=1)
-    plate_det_host = plate_conf.detector_server['host']
-    plate_det_port = plate_conf.detector_server['port']
-    plate_det_address = plate_conf.get_tcp_address(plate_det_host, plate_det_port)
-    plate_det_client = init_client(ctx, plate_det_address)
+    # Initialize zmq context and sockets when necessary
+    if not is_initialized:
+        print("Initializing plate sockets")
+        extract_plate.ctx = zmq.Context(io_threads=1)
+        plate_det_host = plate_conf.detector_server['host']
+        plate_det_port = plate_conf.detector_server['port']
+        plate_det_address = plate_conf.get_tcp_address(plate_det_host, plate_det_port)
+        extract_plate.plate_det_client = init_client(extract_plate.ctx, plate_det_address)
 
-    plate_recog_host = plate_conf.recognizer_server['host']
-    plate_recog_port = plate_conf.recognizer_server['port']
-    plate_recog_address = plate_conf.get_tcp_address(plate_recog_host, plate_recog_port)
-    plate_recog_client = init_client(ctx, plate_recog_address)
+        plate_recog_host = plate_conf.recognizer_server['host']
+        plate_recog_port = plate_conf.recognizer_server['port']
+        plate_recog_address = plate_conf.get_tcp_address(plate_recog_host, plate_recog_port)
+        extract_plate.plate_recog_client = init_client(extract_plate.ctx, plate_recog_address)
+        is_initialized = True
 
     found_plate = ""
     # Encode and send cropped car to detect plate location
     cv_encoded_img = cv2.imencode(".jpg", cropped)[1]
     encoded_img = base64.b64encode(cv_encoded_img)
-    plate_det_client.send(encoded_img)
-    detector_reply = plate_det_client.recv()
+    extract_plate.plate_det_client.send(encoded_img)
+    detector_reply = extract_plate.plate_det_client.recv()
     detector_reply = json.loads(detector_reply.decode("utf-8"))
     # If there is an error, just return an empty plate
     if detector_reply['message'] != "OK":
-        return found_plate
+        return found_plate, is_initialized
 
     #TODO: Just using a single plate
     detector_results = detector_reply['result'][0]
@@ -323,7 +302,8 @@ def extract_plate(cropped):
     print("Coords: ", coord_info)
     # If coordinate info is empty, return empty plate since we could not found any plates
     if not coord_info:
-        return found_plate
+        print("Coord info is empty, could not find any plates..")
+        return found_plate, is_initialized
 
     # Crop the plate out of the car image
     #TODO: Add margin logic here
@@ -335,20 +315,20 @@ def extract_plate(cropped):
 
     cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
     encoded_plate_img = base64.b64encode(cv_encoded_plate_img)
-    plate_recog_client.send(encoded_plate_img)
-    recog_reply = plate_recog_client.recv()
+    extract_plate.plate_recog_client.send(encoded_plate_img)
+    recog_reply = extract_plate.plate_recog_client.recv()
     recog_reply = json.loads(recog_reply.decode("utf-8"))
     print(recog_reply)
 
     # If there is an error, just return an empty plate
     if recog_reply["message"] != "OK":
-        return found_plate
+        return found_plate, is_initialized
 
     plate_results = recog_reply['result'][0]
     found_plate = plate_results['plate']
     print(found_plate)
     print("Exiting plate extraction")
-    return found_plate
+    return found_plate, is_initialized
 
 
 def handle_requests(ctx, socket):
@@ -367,10 +347,9 @@ def handle_requests(ctx, socket):
     # Define a concurrent future and an executor to be used in case plate recognition is enabled
     future1 = None
     executor = None
+    is_initialized = False
     use_plate_recognition = car_conf.crcl["enable_plate_recognition"]
     if use_plate_recognition:
-        # Load configs once
-
         # Initialize process executor once
         executor = ProcessPoolExecutor(max_workers=1)
 
@@ -403,7 +382,8 @@ def handle_requests(ctx, socket):
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
                     if use_plate_recognition:
-                        future1 = executor.submit(extract_plate, cropped)
+                        print("Is inited at start: ", is_initialized)
+                        future1 = executor.submit(extract_plate, cropped, is_initialized)
 
                     # Preprocess the image
                     cropped = cropped * 1./255
@@ -424,7 +404,9 @@ def handle_requests(ctx, socket):
 
                     # Wait for plate recognition to finish its job
                     if use_plate_recognition and future1 is not None:
-                        found_plate = future1.result()
+                        found_plate, is_initialized = future1.result()
+                        print("Is inited at end: ", is_initialized)
+
 
                     cl = {
                         'label' : o['label'],
