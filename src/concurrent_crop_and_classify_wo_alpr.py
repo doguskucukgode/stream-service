@@ -311,6 +311,16 @@ def extract_plate(cropped, is_initialized):
     topleft_y = int(coord_info['topleft']['y'])
     bottomright_x = int(coord_info['bottomright']['x'])
     bottomright_y = int(coord_info['bottomright']['y'])
+    width = int(bottomright_x - topleft_x)
+    height = int(bottomright_y - topleft_y)
+    margin_width = int(height / 2)
+    margin_height = int(height / 4)
+
+    topleft_x -= margin_width
+    topleft_y -= margin_height
+    bottomright_x += margin_width
+    bottomright_y += margin_height
+
     cropped_plate_img = cropped[topleft_y:bottomright_y, topleft_x:bottomright_x]
 
     cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
