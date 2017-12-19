@@ -50,6 +50,7 @@ def handle_requests(socket, plate_detector):
     while True:
         result_dict = {}
         message = "OK"
+        all_detected_plates = []
 
         try:
             # Get image from socket and perform detection
@@ -61,7 +62,6 @@ def handle_requests(socket, plate_detector):
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
             plate_coords = detect_plates(plate_detector, iteration_inc, strictness, image)
-            all_detected_plates = []
             for (x, y, w, h) in plate_coords:
                 topleft = {}
                 bottomright = {}
