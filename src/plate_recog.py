@@ -96,12 +96,6 @@ def almost_equal(w1, w2):
             return True
 
 
-def detect_plates(plate_classifier, iteration_inc, strictness, img):
-    plates = plate_classifier.detectMultiScale(img, iteration_inc, strictness)
-    # print("Found plates: ", plates)
-    return plates
-
-
 def handle_requests(socket, plate_recognizer):
     # Load recognition related configs
     image_width = plate_conf.recognition["image_width"]
