@@ -7,6 +7,7 @@ import sys
 import zmq
 import uuid
 import json
+import time
 import copy
 import base64
 import operator
@@ -19,6 +20,7 @@ import keras.backend.tensorflow_backend as K
 from concurrent.futures import ProcessPoolExecutor
 
 # Internal imports
+from helper import measure_time
 import car_conf
 import plate_conf
 
@@ -111,6 +113,7 @@ def load_SSD_model():
 
 
 # Main image processing routine of SSD.
+@measure_time
 def process_image(img, model, select_threshold=0.5, nms_threshold=.45, net_shape=net_shape):
     # Run SSD network.
     rimg, rpredictions, rlocalisations, rbbox_img = isess.run(\
@@ -138,7 +141,7 @@ class Predict(object):
         self.name = name
         self.score = score
 
-
+@measure_time
 def classifyIndices(data, preds, n):
     predValues = []
     for index, pred in enumerate(preds):
@@ -165,6 +168,7 @@ def load_model_and_json():
 
 
 # Extracts objects from the given image and returns a list of predictions
+@measure_time
 def extract_objects(model, image):
     # Feed image to the network
     predictions = []
@@ -203,6 +207,7 @@ def extract_objects(model, image):
 
 
 # Extracts the image from the received request
+@measure_time
 def decode_request(request):
     try:
         img = base64.b64decode(request)
@@ -235,6 +240,7 @@ def init_client(context, address):
         print ("Could not initialize the client: " + str(e))
 
 
+@measure_time
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -267,82 +273,117 @@ def crop_image(image, topleft, bottomright, confidence):
 
 
 #TODO: Add timeout logic here
+# def extract_plate(cropped, is_initialized):
+#     print("Entered plate extraction")
+#     # Initialize zmq context and sockets when necessary
+#     if not is_initialized:
+#         print("Initializing plate sockets")
+#         extract_plate.ctx = zmq.Context(io_threads=1)
+#         plate_det_host = plate_conf.detector_server['host']
+#         plate_det_port = plate_conf.detector_server['port']
+#         plate_det_address = plate_conf.get_tcp_address(plate_det_host, plate_det_port)
+#         extract_plate.plate_det_client = init_client(extract_plate.ctx, plate_det_address)
+#
+#         plate_recog_host = plate_conf.recognizer_server['host']
+#         plate_recog_port = plate_conf.recognizer_server['port']
+#         plate_recog_address = plate_conf.get_tcp_address(plate_recog_host, plate_recog_port)
+#         extract_plate.plate_recog_client = init_client(extract_plate.ctx, plate_recog_address)
+#         is_initialized = True
+#     time_start = time.time()
+#
+#     found_plate = ""
+#     # Encode and send cropped car to detect plate location
+#     cv_encoded_img = cv2.imencode(".jpg", cropped)[1]
+#     encoded_img = base64.b64encode(cv_encoded_img)
+#     extract_plate.plate_det_client.send(encoded_img)
+#     detector_reply = extract_plate.plate_det_client.recv()
+#     detector_reply = json.loads(detector_reply.decode("utf-8"))
+#     # If there is an error, just return an empty plate
+#     if detector_reply['message'] != "OK":
+#         return found_plate, is_initialized
+#
+#     detector_results = detector_reply['result']
+#     print("Detector results: ", detector_results)
+#
+#     for detected_plate in detector_results:
+#         coord_info = detected_plate['coords']
+#         print("Coords: ", coord_info)
+#         # If coordinate info is empty, return empty plate since we could not found any plates
+#         if not coord_info:
+#             print("Coord info is empty, could not find any plates..")
+#             return found_plate, is_initialized
+#
+#         # Crop the plate out of the car image
+#         topleft_x = int(coord_info['topleft']['x'])
+#         topleft_y = int(coord_info['topleft']['y'])
+#         bottomright_x = int(coord_info['bottomright']['x'])
+#         bottomright_y = int(coord_info['bottomright']['y'])
+#         width = int(bottomright_x - topleft_x)
+#         height = int(bottomright_y - topleft_y)
+#         margin_width = int(height / 2)
+#         margin_height = int(height / 4)
+#
+#         # Add margins
+#         topleft_x -= margin_width
+#         topleft_y -= margin_height
+#         bottomright_x += margin_width
+#         bottomright_y += margin_height
+#         # Crop the detected plate
+#         cropped_plate_img = cropped[topleft_y:bottomright_y, topleft_x:bottomright_x]
+#         # Recognize the cropped plate image
+#         cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
+#         encoded_plate_img = base64.b64encode(cv_encoded_plate_img)
+#         extract_plate.plate_recog_client.send(encoded_plate_img)
+#         recog_reply = extract_plate.plate_recog_client.recv()
+#         recog_reply = json.loads(recog_reply.decode("utf-8"))
+#         print(recog_reply)
+#
+#         # If there is an error, just return an empty plate
+#         if recog_reply["message"] != "OK":
+#             print(recog_reply["message"])
+#             continue
+#
+#         plate_results = recog_reply['result'][0]
+#         if plate_results['plate'] != '':
+#             found_plate = plate_results['plate']
+#             break
+#
+#     print(found_plate)
+#     print("Exiting plate extraction")
+#     time_end = time.time()
+#     print("Extracting plate totally took: "+ str((time_end-time_start)*1000)+" ms")
+#     return found_plate, is_initialized
+
+
 def extract_plate(cropped, is_initialized):
     print("Entered plate extraction")
     # Initialize zmq context and sockets when necessary
     if not is_initialized:
         print("Initializing plate sockets")
         extract_plate.ctx = zmq.Context(io_threads=1)
-        plate_det_host = plate_conf.detector_server['host']
-        plate_det_port = plate_conf.detector_server['port']
-        plate_det_address = plate_conf.get_tcp_address(plate_det_host, plate_det_port)
-        extract_plate.plate_det_client = init_client(extract_plate.ctx, plate_det_address)
+        plate_host = plate_conf.plate_server['host']
+        plate_port = plate_conf.plate_server['port']
 
-        plate_recog_host = plate_conf.recognizer_server['host']
-        plate_recog_port = plate_conf.recognizer_server['port']
-        plate_recog_address = plate_conf.get_tcp_address(plate_recog_host, plate_recog_port)
-        extract_plate.plate_recog_client = init_client(extract_plate.ctx, plate_recog_address)
+        plate_address = plate_conf.get_tcp_address(plate_host, plate_port)
+        extract_plate.plate_client = init_client(extract_plate.ctx, plate_address)
         is_initialized = True
+    time_start = time.time()
 
     found_plate = ""
     # Encode and send cropped car to detect plate location
     cv_encoded_img = cv2.imencode(".jpg", cropped)[1]
     encoded_img = base64.b64encode(cv_encoded_img)
-    extract_plate.plate_det_client.send(encoded_img)
-    detector_reply = extract_plate.plate_det_client.recv()
-    detector_reply = json.loads(detector_reply.decode("utf-8"))
+    extract_plate.plate_client.send(encoded_img)
+    plate_reply = extract_plate.plate_client.recv()
+    plate_reply = json.loads(plate_reply.decode("utf-8"))
     # If there is an error, just return an empty plate
-    if detector_reply['message'] != "OK":
+    if plate_reply['message'] != "OK":
         return found_plate, is_initialized
 
-    detector_results = detector_reply['result']
-    print("Detector results: ", detector_results)
-
-    for detected_plate in detector_results:
-        coord_info = detected_plate['coords']
-        print("Coords: ", coord_info)
-        # If coordinate info is empty, return empty plate since we could not found any plates
-        if not coord_info:
-            print("Coord info is empty, could not find any plates..")
-            return found_plate, is_initialized
-
-        # Crop the plate out of the car image
-        topleft_x = int(coord_info['topleft']['x'])
-        topleft_y = int(coord_info['topleft']['y'])
-        bottomright_x = int(coord_info['bottomright']['x'])
-        bottomright_y = int(coord_info['bottomright']['y'])
-        width = int(bottomright_x - topleft_x)
-        height = int(bottomright_y - topleft_y)
-        margin_width = int(height / 2)
-        margin_height = int(height / 4)
-
-        # Add margins
-        topleft_x -= margin_width
-        topleft_y -= margin_height
-        bottomright_x += margin_width
-        bottomright_y += margin_height
-        # Crop the detected plate
-        cropped_plate_img = cropped[topleft_y:bottomright_y, topleft_x:bottomright_x]
-        # Recognize the cropped plate image
-        cv_encoded_plate_img = cv2.imencode(".jpg", cropped_plate_img)[1]
-        encoded_plate_img = base64.b64encode(cv_encoded_plate_img)
-        extract_plate.plate_recog_client.send(encoded_plate_img)
-        recog_reply = extract_plate.plate_recog_client.recv()
-        recog_reply = json.loads(recog_reply.decode("utf-8"))
-        print(recog_reply)
-
-        # If there is an error, just return an empty plate
-        if recog_reply["message"] != "OK":
-            print(recog_reply["message"])
-            continue
-
-        plate_results = recog_reply['result'][0]
-        if plate_results['plate'] != '':
-            found_plate = plate_results['plate']
-            break
-
-    print(found_plate)
+    found_plate = plate_reply['result']
     print("Exiting plate extraction")
+    time_end = time.time()
+    print("Extracting plate totally took: "+ str((time_end-time_start)*1000)+" ms")
     return found_plate, is_initialized
 
 
@@ -376,6 +417,7 @@ def handle_requests(ctx, socket):
     while True:
         try:
             request = socket.recv()
+            time1 = time.time()
             image = decode_request(request)
 
             found_objects = []
@@ -396,14 +438,16 @@ def handle_requests(ctx, socket):
 
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
+                    time2 = time.time()
                     if use_plate_recognition:
                         print("Is inited at start: ", is_initialized)
                         future1 = executor.submit(extract_plate, cropped, is_initialized)
-
+                    time3 = time.time()
                     # Preprocess the image
                     cropped = cropped * 1./255
                     cropped = cv2.resize(cropped, (299, 299))
                     cropped = cropped.reshape((1,) + cropped.shape)
+                    time4 = time.time()
                     # Feed image to classifier
                     preds = car_classifier_model.predict(cropped)[0]
                     predict_list = classifyIndices(
@@ -411,7 +455,7 @@ def handle_requests(ctx, socket):
                         preds,
                         car_conf.crcl["n"]
                     )
-
+                    time5 = time.time()
                     predictions = []
                     tags = ["model", "score"]
                     for index, p in enumerate(predict_list):
@@ -421,7 +465,11 @@ def handle_requests(ctx, socket):
                     if use_plate_recognition and future1 is not None:
                         found_plate, is_initialized = future1.result()
                         print("Is inited at end: ", is_initialized)
-
+                    time6 = time.time()
+                    print("Submitting work to executor took: "+ str((time3-time2)*1000) +" ms")
+                    print("OpenCV ops took: "+ str((time4-time3)*1000) +" ms")
+                    print("A classification took: "+ str((time5-time4)*1000) +" ms")
+                    print("Waited plate ops for: "+ str((time6-time5)*1000) +" ms")
 
                     cl = {
                         'label' : o['label'],
@@ -436,8 +484,12 @@ def handle_requests(ctx, socket):
             result_dict = {}
             result_dict["result"] = clasifications
             result_dict["message"] = "OK"
+            time7 = time.time()
             # print(result_dict)
             socket.send_json(result_dict)
+            time8 = time.time()
+            print("Socket send took: "+ str((time8-time7)*1000) +" ms")
+            print("CRCL total took: "+ str((time8-time1)*1000) +" ms")
         except Exception as e:
             result_dict = {}
             result_dict["result"] = []
