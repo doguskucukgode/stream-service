@@ -19,6 +19,11 @@ recognizer_server = {
     "port" : "43434"
 }
 
+plate_server = {
+    "host" : "127.0.0.1",
+    "port" : "41414"
+}
+
 detection = {
     "classifier_path" : SOURCE_FOLDER + "/" + "eu.xml",
 
