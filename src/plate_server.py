@@ -100,13 +100,9 @@ def handle_requests(socket, plate_detector, plate_recognizer):
     # Compile regex that matches with invalid TR plates
     invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
     invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
-    print("Plate recognition is started on: ", tcp_address)
-
     net_inp = plate_recognizer.get_layer(name='the_input').input
     net_out = plate_recognizer.get_layer(name='softmax').output
-
-
-    print("Plate detection is started on: ", tcp_address)
+    print("Plate server is started on: ", tcp_address)
 
     while True:
         result_dict = {}
@@ -166,10 +162,10 @@ def handle_requests(socket, plate_detector, plate_recognizer):
                 margin_height = int(height / 4)
 
                 # Add margins
-                topleft_x -= margin_width
-                topleft_y -= margin_height
-                bottomright_x += margin_width
-                bottomright_y += margin_height
+                topleft_x = max(0, topleft_x - margin_width)
+                topleft_y = max(0, topleft_y - margin_height)
+                bottomright_x = min(width, bottomright_x + margin_width)
+                bottomright_y = min(height, bottomright_y + margin_height)
                 # Crop the detected plate
                 cropped_plate_img = image[topleft_y:bottomright_y, topleft_x:bottomright_x]
                 # Recognize the cropped plate image
