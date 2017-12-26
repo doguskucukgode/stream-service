@@ -147,7 +147,6 @@ def handle_requests(socket, plate_detector, plate_recognizer):
 
                 for index, detected_plate in enumerate(all_detected_plates):
                     coord_info = detected_plate['coords']
-                    print("Coords: ", coord_info)
                     # If coordinate info is empty, return empty plate since we could not found any plates
                     if not coord_info:
                         print("Coord info is empty, could not find any plates..")
