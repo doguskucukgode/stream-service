@@ -36,7 +36,7 @@ detection = {
     # It must be greater than 1.0.  A value of 1.01 means increase by 1%, 1.10 increases it by 10% each time.
     # So a 1% increase would be ~10x slower than 10% to process, but it has a higher chance of landing
     # directly on the plate and getting a strong detection
-    "detection_iteration_increase" : 1.05,
+    "detection_iteration_increase" : 1.1,
 
 }
 
