@@ -45,8 +45,7 @@ from nets import ssd_vgg_300, ssd_vgg_512, ssd_common, np_methods
 
 # Since tensorflow does not allow for different memory usages for graphs used in the same process,
 # we cannot make SSD use a different GPU fraction
-#gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=config.crcl["ssd_gpu_memory_frac"])
-gpu_options = tf.GPUOptions()
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=car_conf.crcl["classifier_gpu_memory_frac"])
 conf = tf.ConfigProto(log_device_placement=False, gpu_options=gpu_options)
 isess = tf.Session(config=conf)
 
