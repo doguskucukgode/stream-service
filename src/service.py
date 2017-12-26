@@ -200,39 +200,41 @@ class StreamProcess(multiprocessing.Process):
                     color = self.color_map[predictions[0]['model']]
                     topleft = res['topleft']
                     bottomright = res['bottomright']
+                    topleft_x = topleft['x']
+                    topleft_y = topleft['y']
+                    bottomright_x = bottomright['x']
+                    bottomright_y = bottomright['y']
 
                     cv2.rectangle(
                         image,
-                        (int(topleft['x']), int(topleft['y'])),
-                        (int(bottomright['x']), int(bottomright['y'])),
+                        (topleft_x, topleft_y),
+                        (bottomright_x, bottomright_y),
                         color,
                         4
                     )
 
                     plate = res['plate']
+                    # if plate != "":
+                    #     text = predictions[0]['model'] + "_" + plate + ' - ' + str(predictions[0]['score'])
+                    # else:
+                    #     text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
                     if plate != "":
-                        text = predictions[0]['model'] + "_" + plate + ' - ' + str(predictions[0]['score'])
-                    else:
-                        text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
-                    #if plate != "":
-                        #predictions[0]['model'] = predictions[0]['model'] + "_" + plate
-                        # plate_x = int(topleft['x']) + 10
-                        # plate_y = int(topleft['y']) + 30
-                        # cv2.rectangle(
-                        #     image,
-                        #     (int(topleft['x']), int(topleft['y'])),
-                        #     (int(topleft['x']) + 120, int(topleft['y'] + 50)),
-                        #     (255, 255, 255),
-                        #     cv2.FILLED
-                        # )
-                        #
-                        # cv2.putText(image, plate, (plate_x, plate_y),
-                        #     cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                        #     (0, 0, 0), 2, cv2.LINE_AA
-                        # )
+                        cv2.rectangle(
+                            image,
+                            (topleft_x, topleft_y),
+                            (topleft_x + 110, topleft_y + 20),
+                            (255, 255, 255),
+                            cv2.FILLED
+                        )
 
-                    text_x = int(topleft['x']) + 5
-                    text_y = int(bottomright['y']) - 10
+                        cv2.putText(image, plate,
+                            (topleft_x + 5, topleft_y + 15),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                            (0, 0, 0), 1, cv2.LINE_AA
+                        )
+
+                    text_x = topleft_x + 5
+                    text_y = bottomright_y - 10
                     cv2.putText(image, text, (text_x, text_y),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7,
                         #(220, 220, 220),
