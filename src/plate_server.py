@@ -94,8 +94,8 @@ def handle_requests(socket, plate_detector, plate_recognizer):
     strictness = plate_conf.detection["detection_strictness"]
 
     # Load recognition related configs
-    image_width = plate_conf.recognition["image_width"]
-    image_height = plate_conf.recognition["image_height"]
+    required_image_width = plate_conf.recognition["image_width"]
+    required_image_height = plate_conf.recognition["image_height"]
 
     # Compile regex that matches with invalid TR plates
     invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
@@ -116,8 +116,10 @@ def handle_requests(socket, plate_detector, plate_recognizer):
             image = decode_request(request)
             #TODO: check len of shape it must be three
             # Do not attempt manipulating image if it is already grayscale
-            if image.shape[2] != 1:
+            image_h, image_w, dim = image.shape
+            if dim != 1:
                 image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
 
             plate_coords = detect_plates(plate_detector, iteration_inc, strictness, image)
             for (x, y, w, h) in plate_coords:
@@ -138,62 +140,61 @@ def handle_requests(socket, plate_detector, plate_recognizer):
                 all_detected_plates.append(detected)
 
             all_detected_plates = sorted(all_detected_plates, key=lambda detected: detected["area"], reverse=True)
+            if len(all_detected_plates) > 0:
+                # Feeding a single image at a time: (1, image_width, image_height, 1)
+                # Otherwise X_data should be of shape: (n, image_width, image_height, 1)
+                X_data = np.ones([len(all_detected_plates), required_image_width, required_image_height, 1])
 
-            # Feeding a single image at a time: (1, image_width, image_height, 1)
-            # Otherwise X_data should be of shape: (n, image_width, image_height, 1)
-            X_data = np.ones([len(all_detected_plates), image_width, image_height, 1])
+                for index, detected_plate in enumerate(all_detected_plates):
+                    coord_info = detected_plate['coords']
+                    print("Coords: ", coord_info)
+                    # If coordinate info is empty, return empty plate since we could not found any plates
+                    if not coord_info:
+                        print("Coord info is empty, could not find any plates..")
+                        break
 
-            for index, detected_plate in enumerate(all_detected_plates):
-                coord_info = detected_plate['coords']
-                print("Coords: ", coord_info)
-                # If coordinate info is empty, return empty plate since we could not found any plates
-                if not coord_info:
-                    print("Coord info is empty, could not find any plates..")
-                    break
+                    # Crop the plate out of the car image
+                    topleft_x = int(coord_info['topleft']['x'])
+                    topleft_y = int(coord_info['topleft']['y'])
+                    bottomright_x = int(coord_info['bottomright']['x'])
+                    bottomright_y = int(coord_info['bottomright']['y'])
+                    width = int(bottomright_x - topleft_x)
+                    height = int(bottomright_y - topleft_y)
+                    margin_width = int(height / 2)
+                    margin_height = int(height / 4)
 
-                # Crop the plate out of the car image
-                topleft_x = int(coord_info['topleft']['x'])
-                topleft_y = int(coord_info['topleft']['y'])
-                bottomright_x = int(coord_info['bottomright']['x'])
-                bottomright_y = int(coord_info['bottomright']['y'])
-                width = int(bottomright_x - topleft_x)
-                height = int(bottomright_y - topleft_y)
-                margin_width = int(height / 2)
-                margin_height = int(height / 4)
+                    # Add margins
+                    topleft_x = max(0, topleft_x - margin_width)
+                    topleft_y = max(0, topleft_y - margin_height)
+                    bottomright_x = min(image_w, bottomright_x + margin_width)
+                    bottomright_y = min(image_h, bottomright_y + margin_height)
+                    # Crop the detected plate
+                    cropped_plate_img = image[topleft_y:bottomright_y, topleft_x:bottomright_x]
+                    # Recognize the cropped plate image
+                    cropped_plate_img = cv2.resize(cropped_plate_img, (required_image_width, required_image_height))
+                    cropped_plate_img = cropped_plate_img.astype(np.float32)
+                    cropped_plate_img /= 255
 
-                # Add margins
-                topleft_x = max(0, topleft_x - margin_width)
-                topleft_y = max(0, topleft_y - margin_height)
-                bottomright_x = min(width, bottomright_x + margin_width)
-                bottomright_y = min(height, bottomright_y + margin_height)
-                # Crop the detected plate
-                cropped_plate_img = image[topleft_y:bottomright_y, topleft_x:bottomright_x]
-                # Recognize the cropped plate image
-                cropped_plate_img = cv2.resize(cropped_plate_img, (image_width, image_height))
-                cropped_plate_img = cropped_plate_img.astype(np.float32)
-                cropped_plate_img /= 255
+                    # width and height are backwards from typical Keras convention
+                    # because width is the time dimension when it gets fed into the RNN
+                    cropped_plate_img = cropped_plate_img.T   # (128, 32)
+                    cropped_plate_img = np.expand_dims(cropped_plate_img, -1) # (128, 32, 1)
 
-                # width and height are backwards from typical Keras convention
-                # because width is the time dimension when it gets fed into the RNN
-                cropped_plate_img = cropped_plate_img.T   # (128, 32)
-                cropped_plate_img = np.expand_dims(cropped_plate_img, -1) # (128, 32, 1)
+                    # Populate X_data with cropped and processed plate regions
+                    X_data[index] = cropped_plate_img
 
-                # Populate X_data with cropped and processed plate regions
-                X_data[index] = cropped_plate_img
+                net_out_value = sess.run(net_out, feed_dict={net_inp:X_data})
+                pred_texts = decode_batch(net_out_value)
+                filtered_candidates = []
+                for plate_text in pred_texts:
+                    # If our regex does not match with a plate, then it is a good candidate
+                    if not invalid_plate_pattern.search(plate_text):
+                        filtered_candidates.append(plate_text)
 
-            net_out_value = sess.run(net_out, feed_dict={net_inp:X_data})
-            pred_texts = decode_batch(net_out_value)
-            filtered_candidates = []
-            for plate_text in pred_texts:
-                # If our regex does not match with a plate, then it is a good candidate
-                if not invalid_plate_pattern.search(plate_text):
-                    filtered_candidates.append(plate_text)
-
-            if len(filtered_candidates) > 0:
-                found_plate = filtered_candidates[0]
+                if len(filtered_candidates) > 0:
+                    found_plate = filtered_candidates[0]
         except Exception as e:
             message = str(e)
-
 
         result_dict["result"] = found_plate
         result_dict["message"] = message
