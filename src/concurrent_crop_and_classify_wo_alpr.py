@@ -259,10 +259,12 @@ def crop_image(image, topleft, bottomright, confidence):
         if margined_Y + margined_height > actual_height:
             margined_height = actual_height - margined_Y
 
-        y2 = margined_Y + margined_height
-        x2 = margined_X + margined_width
-        return image[margined_Y:y2, margined_X:x2]
-    return None
+        # Calculating bottomright coordinates
+        margined_Y_BR = margined_Y + margined_height
+        margined_X_BR = margined_X + margined_width
+        # Returning cropped images with margined and original values
+        return image[margined_Y:margined_Y_BR, margined_X:margined_X_BR], image[y1:y2, x1:x2]
+    return None, None
 
 
 #TODO: Add timeout logic here
@@ -332,8 +334,8 @@ def handle_requests(ctx, socket):
             with sess.as_default():
                 for o in found_objects:
                     # Crop image according to empirical margin values
-                    cropped = crop_image(image, o['topleft'], o['bottomright'], float(o['confidence']))
-                    if cropped is None:
+                    cropped, cropped_wo_margin = crop_image(image, o['topleft'], o['bottomright'], float(o['confidence']))
+                    if cropped is None or cropped_wo_margin is None:
                         continue
 
                     found_plate = ""
@@ -341,8 +343,9 @@ def handle_requests(ctx, socket):
                     filtered_candidates = []
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
+                    # Also notice that, we are sending the original cropped image to plate extraction (a.k.a. no margins)
                     if use_plate_recognition:
-                        future1 = executor.submit(extract_plate, cropped, is_initialized)
+                        future1 = executor.submit(extract_plate, cropped_wo_margin, is_initialized)
 
                     # Preprocess the image
                     cropped = cropped * 1./255
