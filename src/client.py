@@ -74,15 +74,22 @@ def annotate_crcl(image, message, out_path):
         label = res['label']
         confidence = float(res['confidence'])
         predictions = res['predictions']
-        if confidence > car_conf.crop_values['min_confidence'] and\
-            float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
+        if confidence > car_conf.crop_values['min_confidence']:# and\
+            # float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
+            print("Results fulfill the requirements, annotating the image..")
             topleft = res['topleft']
             bottomright = res['bottomright']
+            topleft_x = int(topleft['x'])
+            topleft_y = int(topleft['y'])
+            bottomright_x = int(bottomright['x'])
+            bottomright_y = int(bottomright['y'])
+            image_width = bottomright_x - topleft_x
+            image_height = bottomright_y - topleft_y
 
             cv2.rectangle(
                 image,
-                (int(topleft['x']), int(topleft['y'])),
-                (int(bottomright['x']), int(bottomright['y'])),
+                (topleft_x, topleft_y),
+                (bottomright_x, bottomright_y),
                 (255, 255, 255)
             )
 
@@ -92,19 +99,19 @@ def annotate_crcl(image, message, out_path):
 
             plate = res['plate']
             if plate != "":
-                plate_x = int(topleft['x']) + 10
-                plate_y = int(topleft['y']) + 30
+                print("Detected plate: ", plate)
                 cv2.rectangle(
                     image,
-                    (int(topleft['x']), int(topleft['y'])),
-                    (int(topleft['x']) + 130, int(topleft['y'] + 50)),
+                    (topleft_x, topleft_y),
+                    (topleft_x + 110, topleft_y + 20),
                     (255, 255, 255),
                     cv2.FILLED
                 )
 
-                cv2.putText(image, plate, (plate_x, plate_y),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                    (0, 0, 0), 2, cv2.LINE_AA
+                cv2.putText(image, plate,
+                    (topleft_x + 5, topleft_y + 15),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (0, 0, 0), 1, cv2.LINE_AA
                 )
 
     cv2.imwrite(out_path + '/result.jpg', image)
@@ -151,7 +158,7 @@ if __name__ == '__main__':
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_path = "/home/taylan/Desktop/car_images/raw/dogus.png"
+    input_path = "/home/taylan/Desktop/car_images/raw/plate-1.jpg"
     # input_path = "/home/dogus/git/stream-service/do2.jpg"
 
     image = cv2.imread(input_path, 1)
