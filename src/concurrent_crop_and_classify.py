@@ -8,6 +8,7 @@ import zmq
 import uuid
 import json
 import copy
+import time
 import base64
 import operator
 import numpy as np
@@ -20,6 +21,7 @@ from openalpr import Alpr
 from concurrent.futures import ProcessPoolExecutor
 
 # Internal imports
+from helper import measure_time
 import car_conf
 import plate_conf
 
@@ -44,8 +46,7 @@ from nets import ssd_vgg_300, ssd_vgg_512, ssd_common, np_methods
 
 # Since tensorflow does not allow for different memory usages for graphs used in the same process,
 # we cannot make SSD use a different GPU fraction
-#gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=config.crcl["ssd_gpu_memory_frac"])
-gpu_options = tf.GPUOptions()
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=car_conf.crcl["classifier_gpu_memory_frac"])
 conf = tf.ConfigProto(log_device_placement=False, gpu_options=gpu_options)
 isess = tf.Session(config=conf)
 
@@ -116,6 +117,7 @@ def load_SSD_model():
 
 
 # Main image processing routine of SSD.
+@measure_time
 def process_image(img, model, select_threshold=0.5, nms_threshold=.45, net_shape=net_shape):
     # Run SSD network.
     rimg, rpredictions, rlocalisations, rbbox_img = isess.run(\
@@ -143,7 +145,7 @@ class Predict(object):
         self.name = name
         self.score = score
 
-
+@measure_time
 def classifyIndices(data, preds, n):
     predValues = []
     for index, pred in enumerate(preds):
@@ -170,6 +172,7 @@ def load_model_and_json():
 
 
 # Extracts objects from the given image and returns a list of predictions
+@measure_time
 def extract_objects(model, image):
     # Feed image to the network
     predictions = []
@@ -208,6 +211,7 @@ def extract_objects(model, image):
 
 
 # Extracts the image from the received request
+@measure_time
 def decode_request(request):
     try:
         img = base64.b64decode(request)
@@ -232,6 +236,7 @@ def init_server(address):
         raise Exception(message)
 
 
+@measure_time
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -267,6 +272,7 @@ def extract_plate(cropped):
     global alpr
     global invalid_plate_pattern
     # print("Entered plate")
+    time_start = time.time()
     found_plate = ""
     results = alpr.recognize_array(bytes(cv2.imencode('.jpg', cropped)[1]))
     # print("Results: ", results)
@@ -287,6 +293,8 @@ def extract_plate(cropped):
         found_plate = filtered_candidates[0]
 
     # print("Exiting plate")
+    time_end = time.time()
+    print("Extracting plate totally took: "+ str((time_end-time_start)*1000)+" ms")
     return found_plate
 
 
@@ -341,6 +349,7 @@ def handle_requests(socket):
     while True:
         try:
             request = socket.recv()
+            time1 = time.time()
             image = decode_request(request)
 
             found_objects = []
@@ -360,16 +369,19 @@ def handle_requests(socket):
                     found_plate = ""
                     predictions = []
                     filtered_candidates = []
+                    time2 = time.time()
 
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
                     if use_plate_recognition:
                         future1 = executor.submit(extract_plate, cropped)
-
+                    time3 = time.time()
                     # Preprocess the image
                     cropped = cropped * 1./255
                     cropped = cv2.resize(cropped, (299, 299))
                     cropped = cropped.reshape((1,) + cropped.shape)
+                    time4 = time.time()
+
                     # Feed image to classifier
                     preds = car_classifier_model.predict(cropped)[0]
 
@@ -378,6 +390,7 @@ def handle_requests(socket):
                         preds,
                         car_conf.crcl["n"]
                     )
+                    time5 = time.time()
 
                     predictions = []
                     tags = ["model", "score"]
@@ -387,7 +400,11 @@ def handle_requests(socket):
                     # Wait for plate recognition to finish its job
                     if use_plate_recognition and future1 is not None:
                         found_plate = future1.result()
-
+                    time6 = time.time()
+                    print("Submitting work to executor took: "+ str((time3-time2)*1000) +" ms")
+                    print("OpenCV ops took: "+ str((time4-time3)*1000) +" ms")
+                    print("A classification took: "+ str((time5-time4)*1000) +" ms")
+                    print("Waited plate ops for: "+ str((time6-time5)*1000) +" ms")
                     cl = {
                         'label' : o['label'],
                         'confidence' : o['confidence'],
@@ -401,8 +418,13 @@ def handle_requests(socket):
             result_dict = {}
             result_dict["result"] = clasifications
             result_dict["message"] = "OK"
+            time7 = time.time()
+
             # print(result_dict)
             socket.send_json(result_dict)
+            time8 = time.time()
+            print("Socket send took: "+ str((time8-time7)*1000) +" ms")
+            print("CRCL total took: "+ str((time8-time1)*1000) +" ms")
         except Exception as e:
             result_dict = {}
             result_dict["result"] = []
