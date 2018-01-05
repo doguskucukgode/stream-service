@@ -26,12 +26,12 @@ STREAM_SERVER_WOWZA = "wowza"
 STREAM_SERVER_NGINX = "nginx"
 
 class ReceivedInput:
-    def __init__(self, input_type, read_stream, write_stream, action):
+    def __init__(self, input_type,read_url, read_stream, write_stream, action):
         self.input_type = input_type
         self.read_stream = read_stream
         self.write_stream = write_stream
         self.action = action
-        self.read_url = serv_conf.service["STREAM_URL"] + "/" + read_stream
+        self.read_url = read_url
         self.write_url = serv_conf.service["STREAM_URL"] + "/" + write_stream
 
 
@@ -153,10 +153,10 @@ class StreamProcess(multiprocessing.Process):
                         ts = time.time()
                         formatted_ts = datetime.datetime.fromtimestamp(ts)\
                             .strftime(serv_conf.ipcam_demo["timestamp_format"])
-                        filename = formatted_ts + '_' + recognized_name
+                        filename = formatted_ts + '_' + recognized_name + '.jpg'
                         path_to_save = serv_conf.ipcam_demo['recog_save_path']\
                             + "/" + filename
-                        cv2.imwrite(path_to_save, im)
+                        cv2.imwrite(path_to_save, annotated_img)
 
                     im.save(popen.stdin, 'JPEG')
                 else:
@@ -317,6 +317,7 @@ def decode_json(json_data):
         message = json_data["message"]
         received_input = ReceivedInput(
             int(message["type"]),
+            str(message["read_url"]),
             str(message["read_stream"]),
             str(message["write_stream"]),
             int(message["action"])

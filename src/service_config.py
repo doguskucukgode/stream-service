@@ -13,7 +13,7 @@ service = {
     "host" : "0.0.0.0",
     "port" : "54443",
     "ZMQ_URL_CR_CL" : "tcp://localhost:54321",
-    "ZMQ_URL_FACE" : "tcp://localhost:54445",
+    "ZMQ_URL_FACE" : "tcp://localhost:54444",
     "STREAM_URL" : "rtmp://0.0.0.0:1935/live",
     "STREAM_SERVER" : "nginx", #nginx or wowza
     "ffmpeg_path" : "/home/dogus/ffmpeg_install/FFmpeg/ffmpeg"
@@ -52,6 +52,6 @@ nginx_stream_stat = {
 
 ipcam_demo = {
     "in_demo_mode" : True,
-    "recog_save_path" : "/tmp/",
+    "recog_save_path" : "/var/stream_files/face_logs",
     "timestamp_format" : "%Y-%m-%d_%H:%M:%S",
 }
