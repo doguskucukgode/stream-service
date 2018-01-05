@@ -49,3 +49,9 @@ wowza_stream_stat = {
 nginx_stream_stat = {
     "url" : "http://localhost:8888/stats",
 }
+
+ipcam_demo = {
+    "in_demo_mode" : True,
+    "recog_save_path" : "/tmp/",
+    "timestamp_format" : "%Y-%m-%d_%H:%M:%S",
+}

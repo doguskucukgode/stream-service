@@ -3,6 +3,7 @@ import io
 import zmq
 import sys
 import time
+import datetime
 import cv2
 import json
 import base64
@@ -35,7 +36,7 @@ class ReceivedInput:
 
 
 class StreamProcess(multiprocessing.Process):
-    def __init__(self, read_stream, write_stream, stype, sid,read_url,write_url):
+    def __init__(self, read_stream, write_stream, stype, sid, read_url, write_url):
         multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.read_stream = read_stream
@@ -133,10 +134,11 @@ class StreamProcess(multiprocessing.Process):
                 results = decoded_msg['result']
                 return_status = decoded_msg['message']
                 if return_status == 'OK' and len(results) > 0:
+                    recognized_name = ''
                     if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                         annotated_img = self.annotate_crcl(frame, results)
                     elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
-                        annotated_img = self.annotate_face(frame, results)
+                        annotated_img, recognized_name = self.annotate_face(frame, results)
                     cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
                     counter = 0
@@ -145,6 +147,17 @@ class StreamProcess(multiprocessing.Process):
                         im.save(popen.stdin, 'JPEG')
                         counter = counter + 1
                     '''
+
+                    # In demo mode, we save the recognized faces in a
+                    if serv_conf.ipcam_demo["in_demo_mode"]:
+                        ts = time.time()
+                        formatted_ts = datetime.datetime.fromtimestamp(ts)\
+                            .strftime(serv_conf.ipcam_demo["timestamp_format"])
+                        filename = formatted_ts + '_' + recognized_name
+                        path_to_save = serv_conf.ipcam_demo['recog_save_path']\
+                            + "/" + filename
+                        cv2.imwrite(path_to_save, im)
+
                     im.save(popen.stdin, 'JPEG')
                 else:
                     im.save(popen.stdin, 'JPEG')
@@ -158,7 +171,7 @@ class StreamProcess(multiprocessing.Process):
                         if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                             annotated_img = self.annotate_crcl(frame, results)
                         elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
-                            annotated_img = self.annotate_face(frame, results)
+                            annotated_img, recognized_name = self.annotate_face(frame, results)
                         cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                         im = Image.fromarray(cv2_im)
                         im.save(popen.stdin, 'JPEG')
@@ -248,6 +261,7 @@ class StreamProcess(multiprocessing.Process):
 
 
     def annotate_face(self,image, results):
+        name = ''
         try:
             #results = json.loads(message.decode("utf-8"))['result']
             for res in results:
@@ -279,7 +293,7 @@ class StreamProcess(multiprocessing.Process):
         except Exception as e:
             print ("Could not annotate the given image.")
             print(str(e))
-        return image
+        return image, name
 
 
     def shutdown(self):
