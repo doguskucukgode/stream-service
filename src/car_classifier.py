@@ -1,19 +1,16 @@
 # External dependencies
 import io
 import zmq
-from zmq.decorators import context, socket
 import cv2
 import json
-import base64
-import operator
 import numpy as np
-from PIL import Image
 import tensorflow as tf
 from keras.models import load_model
 from keras.preprocessing import image
 import keras.backend.tensorflow_backend as K
 
 # Internal dependencies
+import zmq_comm
 import car_conf
 
 
@@ -37,19 +34,6 @@ def classifyIndices(data, preds, n):
     return predValuesSorted
 
 
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
-
-
 # You may edit the paths for the files in car_conf.py
 def load_model_and_json():
     json_path = car_conf.classifier["model_folder"] + '/' + car_conf.classifier["classes_json"]
@@ -64,19 +48,7 @@ def load_model_and_json():
     return model, loaded_model_json
 
 
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
-def run_inference_on_image(socket):
+def handle_requests(socket):
     # Set tensorflow configs
     tf_config = K.tf.ConfigProto()
     tf_config.gpu_options.per_process_gpu_memory_fraction = car_conf.classifier["gpu_memory_frac"]
@@ -87,7 +59,7 @@ def run_inference_on_image(socket):
 
     # Load model once
     model, loaded_model_json = load_model_and_json()
-    print("Classifier model is loaded.")
+    print("Car classifier is ready to roll.")
     while True:
         result_dict = {}
         predict_list = []
@@ -96,7 +68,7 @@ def run_inference_on_image(socket):
         # Receive image and predict classes
         try:
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             # Preprocess the image
             image = image * 1./255
             image = cv2.resize(image, (299, 299))
@@ -104,7 +76,6 @@ def run_inference_on_image(socket):
             # Feed image to classifier
             preds = model.predict(image)[0]
             predict_list = classifyIndices(loaded_model_json, preds, car_conf.classifier["n"])
-
         except tf.errors.OpError as e:
             message = e.message
         except Exception as e:
@@ -123,11 +94,13 @@ def run_inference_on_image(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = car_conf.get_tcp_address(car_conf.classifier["host"], car_conf.classifier["port"])
-        socket = init_server(tcp_address)
-        print("car-classifier is being started on: ", tcp_address)
-        print("Please wait until the model is loaded...")
-        run_inference_on_image(socket)
+        host = car_conf.classifier["host"]
+        port = car_conf.classifier["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
+        handle_requests(socket)
+        print("Car classifier is being started on: ", tcp_address)
     except Exception as e:
         print(str(e))
     finally:

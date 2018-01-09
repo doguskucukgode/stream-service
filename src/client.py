@@ -7,16 +7,8 @@ import base64
 import face_conf
 
 # Internal imports
+import zmq_comm
 import car_conf
-
-def init_client(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REQ)
-        socket.connect(address)
-        return socket
-    except Exception as e:
-        print ("Could not initialize the client: " + str(e))
 
 
 def read_image_base64(path):
@@ -154,18 +146,19 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "54321"
+    port = "55546"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_path = "/home/taylan/Desktop/car_images/raw/plate-1.jpg"
+    input_path = "/home/taylan/Desktop/car_images/raw/plate-5.jpg"
     # input_path = "/home/dogus/git/stream-service/do2.jpg"
 
     image = cv2.imread(input_path, 1)
     # encoded_img = read_image_base64(input_path)
     encoded_img = read_image_new(input_path)
-    address = face_conf.get_tcp_address(host, port)
-    socket = init_client(address)
+    tcp_address = zmq_comm.get_tcp_address(host, port)
+    ctx = zmq.Context(io_threads=1)
+    socket = zmq_comm.init_client(ctx, tcp_address)
 
     print ("Sending request..")
     socket.send(encoded_img)
