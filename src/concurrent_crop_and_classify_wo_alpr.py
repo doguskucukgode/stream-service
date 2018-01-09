@@ -16,9 +16,10 @@ import tensorflow as tf
 from keras.models import load_model
 from keras.preprocessing import image
 import keras.backend.tensorflow_backend as K
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, TimeoutError
 
 # Internal imports
+import zmq_comm
 import car_conf
 import plate_conf
 
@@ -201,39 +202,6 @@ def extract_objects(model, image):
     raise Exception(message)
 
 
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
-
-
-def init_server(context, address):
-    try:
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
-def init_client(context, address):
-    try:
-        socket = context.socket(zmq.REQ)
-        socket.connect(address)
-        return socket
-    except Exception as e:
-        print ("Could not initialize the client: " + str(e))
-
-
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -276,8 +244,8 @@ def extract_plate(cropped, is_initialized):
         plate_host = plate_conf.plate_server['host']
         plate_port = plate_conf.plate_server['port']
 
-        plate_address = plate_conf.get_tcp_address(plate_host, plate_port)
-        extract_plate.plate_client = init_client(extract_plate.ctx, plate_address)
+        plate_address = zmq_comm.get_tcp_address(plate_host, plate_port)
+        extract_plate.plate_client = zmq_comm.init_client(extract_plate.ctx, plate_address)
         is_initialized = True
 
     found_plate = ""
@@ -325,7 +293,7 @@ def handle_requests(ctx, socket):
     while True:
         try:
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             found_objects = []
             with isess.as_default():
                 found_objects = extract_objects(ssd_model, image)
@@ -351,6 +319,7 @@ def handle_requests(ctx, socket):
                     cropped = cropped * 1./255
                     cropped = cv2.resize(cropped, (299, 299))
                     cropped = cropped.reshape((1,) + cropped.shape)
+                    print("preprocessed")
                     # Feed image to classifier
                     preds = car_classifier_model.predict(cropped)[0]
                     predict_list = classifyIndices(
@@ -358,15 +327,20 @@ def handle_requests(ctx, socket):
                         preds,
                         car_conf.crcl["n"]
                     )
+                    print("fed")
                     predictions = []
                     tags = ["model", "score"]
                     for index, p in enumerate(predict_list):
                         predictions.append(dict(zip(tags, [p.name, str(p.score)])))
 
+                    print("predicted")
                     # Wait for plate recognition to finish its job
                     if use_plate_recognition and future1 is not None:
-                        found_plate, is_initialized = future1.result()
-
+                        try:
+                            found_plate, is_initialized = future1.result(timeout=car_conf.crcl["plate_service_timeout"])
+                        except TimeoutError as e:
+                            print("Could not get any respond from plate service. Timeout.")
+                    print("waited for plate")
                     cl = {
                         'label' : o['label'],
                         'confidence' : o['confidence'],
@@ -382,6 +356,7 @@ def handle_requests(ctx, socket):
             result_dict["message"] = "OK"
             # print(result_dict)
             socket.send_json(result_dict)
+            print("sent")
         except Exception as e:
             result_dict = {}
             result_dict["result"] = []
@@ -395,9 +370,11 @@ def handle_requests(ctx, socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = car_conf.get_tcp_address(car_conf.crcl["host"], car_conf.crcl["port"])
+        host = car_conf.crcl["host"]
+        port = car_conf.crcl["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
-        socket = init_server(ctx, tcp_address)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         handle_requests(ctx, socket)
     except Exception as e:
         print(str(e))

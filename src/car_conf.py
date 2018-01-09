@@ -87,5 +87,6 @@ crcl = {
     # It is used in cropper however
     # "ssd_gpu_memory_frac" : 0.3,
     "classifier_gpu_memory_frac" : 0.8,
-    "enable_plate_recognition" : True
+    "enable_plate_recognition" : True,
+    "plate_service_timeout" : 0.5
 }
