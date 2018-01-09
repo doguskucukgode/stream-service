@@ -15,6 +15,7 @@ from keras import backend as K
 from keras.models import Model, load_model
 
 # Internal imports
+import zmq_comm
 import plate_conf
 
 os.environ["CUDA_VISIBLE_DEVICES"]="1"
@@ -33,31 +34,6 @@ alphabet = {
     19: 'J',  20: 'K',  21: 'L',  22: 'M',  23: 'N',  24: 'O',  25: 'P',  26: 'R',  27: 'S',
     28: 'T',  29: 'U',  30: 'V',  31: 'Y',  32: 'Z',  33: ' '
 }
-
-
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
 
 
 # For a real OCR application, this should be beam search with a dictionary
@@ -120,7 +96,7 @@ def handle_requests(socket, plate_recognizer):
         try:
             # Get image from socket and perform detection
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             #TODO: check len of shape it must be three
             # Do not attempt manipulating image if it is already grayscale
             if image.shape[2] != 1:
@@ -171,8 +147,9 @@ if __name__ == '__main__':
     try:
         host = plate_conf.recognizer_server['host']
         port = plate_conf.recognizer_server['port']
-        tcp_address = plate_conf.get_tcp_address(host, port)
-        socket = init_server(tcp_address)
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         handle_requests(socket, plate_recognizer)
     except Exception as e:
         print(str(e))

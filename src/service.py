@@ -19,6 +19,7 @@ from subprocess import Popen, PIPE
 import random
 
 # Internal imports
+import zmq_comm
 import car_conf
 import service_config as serv_conf
 
@@ -422,18 +423,6 @@ def decode_input(received_input,stream_list):
         raise Exception(message)
 
 
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
 def handle_requests(socket):
     stream_list = []
     while True:
@@ -460,8 +449,11 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = serv_conf.get_tcp_address(serv_conf.service["host"], serv_conf.service["port"])
-        socket = init_server(tcp_address)
+        host = serv_conf.service["host"]
+        port = serv_conf.service["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         print('Server is started on:', tcp_address)
         handle_requests(socket)
     except Exception as e:

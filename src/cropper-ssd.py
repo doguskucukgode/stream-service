@@ -1,3 +1,4 @@
+# External dependencies
 import io
 import os
 import sys
@@ -23,6 +24,9 @@ import cv2
 import tensorflow as tf
 from preprocessing import ssd_vgg_preprocessing
 from nets import ssd_vgg_300, ssd_vgg_512, ssd_common, np_methods
+
+# Internal dependencies
+import zmq_comm
 
 # TensorFlow session: grow memory when needed
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=car_conf.cropper["gpu_memory_frac"])
@@ -149,38 +153,13 @@ def extract_objects(model, image):
     raise Exception(message)
 
 
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
-
-
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
 def handle_requests(socket):
     model = load_model()
     print('The model is loaded without any errors.')
     while True:
         try:
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             predictions = extract_objects(model, image)
             # Build and send the json
             result_dict = {}
@@ -197,8 +176,11 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = car_conf.get_tcp_address(car_conf.cropper["host"], car_conf.cropper["port"])
-        socket = init_server(tcp_address)
+        host = car_conf.cropper["host"]
+        port = car_conf.cropper["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         print('Server is started on:', tcp_address)
         handle_requests(socket)
     except Exception as e:

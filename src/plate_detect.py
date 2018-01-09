@@ -7,33 +7,8 @@ import base64
 import numpy as np
 
 # Internal imports
+import zmq_comm
 import plate_conf
-
-
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_UNCHANGED)
-        # print("Decoding done.")
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
 
 
 def detect_plates(plate_classifier, iteration_inc, strictness, img):
@@ -55,7 +30,7 @@ def handle_requests(socket, plate_detector):
         try:
             # Get image from socket and perform detection
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             #TODO: check len of shape it must be three
             # Do not attempt manipulating image if it is already grayscale
             if image.shape[2] != 1:
@@ -104,8 +79,9 @@ if __name__ == '__main__':
     try:
         host = plate_conf.detector_server['host']
         port = plate_conf.detector_server['port']
-        tcp_address = plate_conf.get_tcp_address(host, port)
-        socket = init_server(tcp_address)
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         handle_requests(socket, plate_detector)
     except Exception as e:
         print(str(e))

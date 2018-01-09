@@ -19,6 +19,7 @@ import keras.backend.tensorflow_backend as K
 from openalpr import Alpr
 
 # Internal imports
+import zmq_comm
 import car_conf
 import plate_conf
 
@@ -202,31 +203,6 @@ def extract_objects(model, image):
     raise Exception(message)
 
 
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
-
-
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
 def crop_image(image, topleft, bottomright, confidence):
     x_margin_percentage = car_conf.crop_values['x_margin_percentage']
     y_margin_percentage = car_conf.crop_values['y_margin_percentage']
@@ -302,7 +278,7 @@ def handle_requests(socket):
     while True:
         try:
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
 
             found_objects = []
             with isess.as_default():
@@ -385,8 +361,11 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = car_conf.get_tcp_address(car_conf.crcl["host"], car_conf.crcl["port"])
-        socket = init_server(tcp_address)
+        host = car_conf.crcl["host"]
+        port = car_conf.crcl["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
         handle_requests(socket)
     except Exception as e:
         print(str(e))

@@ -146,12 +146,12 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "55546"
+    port = "41414"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
     input_path = "/home/taylan/Desktop/car_images/raw/plate-5.jpg"
-    # input_path = "/home/dogus/git/stream-service/do2.jpg"
+    # input_path = "/home/taylan/gitFolder/face-recognition/KnownPeeps/taylan.jpg"
 
     image = cv2.imread(input_path, 1)
     # encoded_img = read_image_base64(input_path)

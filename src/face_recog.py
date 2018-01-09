@@ -14,20 +14,8 @@ import face_recognition
 from collections import Counter
 
 # Internal imports
+import zmq_comm
 import face_conf
-
-
-# Extracts the image from the received request
-def decode_request(request):
-    try:
-        img = base64.b64decode(request)
-        nparr = np.fromstring(img, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        return img
-    except Exception as e:
-        message = "Could not decode the received request."
-        print(message + str(e))
-        raise Exception(message)
 
 
 def recognize_face(face_encoding, known_encodings, img_list, knn, similarity_threshold):
@@ -106,18 +94,6 @@ def tag_images(img_list):
     return img_list
 
 
-def init_server(address):
-    try:
-        context = zmq.Context()
-        socket = context.socket(zmq.REP)
-        socket.bind(address)
-        return socket
-    except Exception as e:
-        message = "Could not initialize the server."
-        print (message + str(e))
-        raise Exception(message)
-
-
 def handle_requests(socket, encodings, img_list):
     # Load configs once
     factor = face_conf.recognition['factor']
@@ -135,7 +111,7 @@ def handle_requests(socket, encodings, img_list):
         try:
             # Get image from socket
             request = socket.recv()
-            image = decode_request(request)
+            image = zmq_comm.decode_request(request)
             # cv2.imwrite("./received.jpg", image)
             # Resize image to 1/factor size for faster face recognition processing
             small_img = cv2.resize(image, (0, 0), fx=1/factor, fy=1/factor)
@@ -179,8 +155,11 @@ def handle_requests(socket, encodings, img_list):
 if __name__ == '__main__':
     socket = None
     try:
-        tcp_address = face_conf.get_tcp_address(face_conf.server["host"], face_conf.server["port"])
-        socket = init_server(tcp_address)
+        host = face_conf.server["host"]
+        port = face_conf.server["port"]
+        tcp_address = zmq_comm.get_tcp_address(host, port)
+        ctx = zmq.Context(io_threads=1)
+        socket = zmq_comm.init_server(ctx, tcp_address)
 
         # Load face encodings
         encodings, all_imgs = check_n_generate_encodings()
