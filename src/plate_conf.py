@@ -2,6 +2,7 @@ import os
 
 SOURCE_FOLDER = os.path.dirname(os.path.realpath(__file__))
 BASE_FOLDER = os.path.dirname(SOURCE_FOLDER)
+MODEL_FOLDER = BASE_FOLDER + "/model"
 
 # Configs
 
@@ -21,7 +22,7 @@ plate_server = {
 }
 
 detection = {
-    "classifier_path" : SOURCE_FOLDER + "/" + "eu.xml",
+    "classifier_path" : MODEL_FOLDER + "/" + "plate_detector.xml",
 
     # The minimum detection strength determines how sure the detection algorithm must be before signaling that
     # a plate region exists.  Technically this corresponds to LBP nearest neighbors (e.g., how many detections
