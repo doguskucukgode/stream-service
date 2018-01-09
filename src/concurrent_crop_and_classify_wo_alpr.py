@@ -319,7 +319,6 @@ def handle_requests(ctx, socket):
                     cropped = cropped * 1./255
                     cropped = cv2.resize(cropped, (299, 299))
                     cropped = cropped.reshape((1,) + cropped.shape)
-                    print("preprocessed")
                     # Feed image to classifier
                     preds = car_classifier_model.predict(cropped)[0]
                     predict_list = classifyIndices(
@@ -327,20 +326,17 @@ def handle_requests(ctx, socket):
                         preds,
                         car_conf.crcl["n"]
                     )
-                    print("fed")
                     predictions = []
                     tags = ["model", "score"]
                     for index, p in enumerate(predict_list):
                         predictions.append(dict(zip(tags, [p.name, str(p.score)])))
 
-                    print("predicted")
                     # Wait for plate recognition to finish its job
                     if use_plate_recognition and future1 is not None:
                         try:
                             found_plate, is_initialized = future1.result(timeout=car_conf.crcl["plate_service_timeout"])
                         except TimeoutError as e:
                             print("Could not get any respond from plate service. Timeout.")
-                    print("waited for plate")
                     cl = {
                         'label' : o['label'],
                         'confidence' : o['confidence'],
@@ -356,7 +352,6 @@ def handle_requests(ctx, socket):
             result_dict["message"] = "OK"
             # print(result_dict)
             socket.send_json(result_dict)
-            print("sent")
         except Exception as e:
             result_dict = {}
             result_dict["result"] = []
