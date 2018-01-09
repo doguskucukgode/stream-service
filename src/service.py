@@ -227,10 +227,7 @@ class StreamProcess(multiprocessing.Process):
                     )
 
                     plate = res['plate']
-                    # if plate != "":
-                    #     text = predictions[0]['model'] + "_" + plate + ' - ' + str(predictions[0]['score'])
-                    # else:
-                    #     text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
+                    text = predictions[0]['model'] + ' - ' + str(predictions[0]['score'])
                     if plate != "":
                         cv2.rectangle(
                             image,
