@@ -21,7 +21,7 @@ import random
 # Internal imports
 import zmq_comm
 import car_conf
-import service_config as serv_conf
+import stream_conf
 
 STREAM_SERVER_WOWZA = "wowza"
 STREAM_SERVER_NGINX = "nginx"
@@ -33,7 +33,7 @@ class ReceivedInput:
         self.write_stream = write_stream
         self.action = action
         self.read_url = read_url
-        self.write_url = serv_conf.service["STREAM_URL"] + "/" + write_stream
+        self.write_url = stream_conf.service["STREAM_URL"] + "/" + write_stream
 
 
 class StreamProcess(multiprocessing.Process):
@@ -60,17 +60,17 @@ class StreamProcess(multiprocessing.Process):
 
 
     def run(self):
-        if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"]:
-            socket = self.init_client(serv_conf.service["ZMQ_URL_CR_CL"])
-        elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"]:
-            socket = self.init_client(serv_conf.service["ZMQ_URL_FACE"])
+        if self.stype == stream_conf.stream["TYPE_CAR_CLASSIFICATION"]:
+            socket = self.init_client(stream_conf.service["ZMQ_URL_CR_CL"])
+        elif self.stype == stream_conf.stream["TYPE_FACE_DETECTION"]:
+            socket = self.init_client(stream_conf.service["ZMQ_URL_FACE"])
 
         print("Client initialized")
         print("Connecting stream " + self.read_url + "...")
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
         #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
-        p =  Popen([serv_conf.service['ffmpeg_path'], '-gpu', '1', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+        p =  Popen([stream_conf.service['ffmpeg_path'], '-gpu', '1', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
@@ -101,8 +101,8 @@ class StreamProcess(multiprocessing.Process):
 
     def reconnect(self, tryCount, p):
         #wait for some time
-        time.sleep(serv_conf.stream["RECONNECT_TIME_OUT"])
-        if tryCount == serv_conf.stream["RECONNECT_TRY_COUNT"]:
+        time.sleep(stream_conf.stream["RECONNECT_TIME_OUT"])
+        if tryCount == stream_conf.stream["RECONNECT_TRY_COUNT"]:
             end_loop = True
             return tryCount, None, None, True
         else:
@@ -120,7 +120,7 @@ class StreamProcess(multiprocessing.Process):
 
     def send_stream(self, frame, popen, i, socket, decoded_msg, counter):
         try:
-            if i % serv_conf.stream["INTERVAL"] == 0:
+            if i % stream_conf.stream["INTERVAL"] == 0:
                 try:
                     cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
@@ -136,26 +136,26 @@ class StreamProcess(multiprocessing.Process):
                 return_status = decoded_msg['message']
                 if return_status == 'OK' and len(results) > 0:
                     recognized_name = ''
-                    if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                    if self.stype == stream_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                         annotated_img = self.annotate_crcl(frame, results)
-                    elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
+                    elif self.stype == stream_conf.stream["TYPE_FACE_DETECTION"] :
                         annotated_img, recognized_name = self.annotate_face(frame, results)
                     cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
                     counter = 0
                     '''
-                    while counter < serv_conf.stream["COPY_COUNT"]:
+                    while counter < stream_conf.stream["COPY_COUNT"]:
                         im.save(popen.stdin, 'JPEG')
                         counter = counter + 1
                     '''
 
                     # In demo mode, we save the recognized faces in a
-                    if serv_conf.ipcam_demo["in_demo_mode"]:
+                    if stream_conf.ipcam_demo["in_demo_mode"]:
                         ts = time.time()
                         formatted_ts = datetime.datetime.fromtimestamp(ts)\
-                            .strftime(serv_conf.ipcam_demo["timestamp_format"])
+                            .strftime(stream_conf.ipcam_demo["timestamp_format"])
                         filename = formatted_ts + '_' + recognized_name + '.jpg'
-                        path_to_save = serv_conf.ipcam_demo['recog_save_path']\
+                        path_to_save = stream_conf.ipcam_demo['recog_save_path']\
                             + "/" + filename
                         cv2.imwrite(path_to_save, annotated_img)
 
@@ -163,15 +163,15 @@ class StreamProcess(multiprocessing.Process):
                 else:
                     im.save(popen.stdin, 'JPEG')
             else :
-                if decoded_msg is not None and counter < serv_conf.stream["COPY_COUNT"]:
+                if decoded_msg is not None and counter < stream_conf.stream["COPY_COUNT"]:
                     #send with coordinate
                     counter += 1
                     results = decoded_msg['result']
                     return_status = decoded_msg['message']
                     if return_status == 'OK' and len(results) > 0:
-                        if self.stype == serv_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                        if self.stype == stream_conf.stream["TYPE_CAR_CLASSIFICATION"] :
                             annotated_img = self.annotate_crcl(frame, results)
-                        elif self.stype == serv_conf.stream["TYPE_FACE_DETECTION"] :
+                        elif self.stype == stream_conf.stream["TYPE_FACE_DETECTION"] :
                             annotated_img, recognized_name = self.annotate_face(frame, results)
                         cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                         im = Image.fromarray(cv2_im)
@@ -338,7 +338,7 @@ def decode_input(received_input,stream_list):
         result = None
         #handle commands
         #Action start command
-        if (received_input.action == serv_conf.actions["ACTION_START"]):
+        if (received_input.action == stream_conf.actions["ACTION_START"]):
             process = None
             print("START command " + received_input.read_url + " received")
             for stream in stream_list:
@@ -362,7 +362,7 @@ def decode_input(received_input,stream_list):
                 stream_list.append(process)
                 result = process.write_stream
         #Action stop command
-        elif (received_input.action == serv_conf.actions["ACTION_STOP"]):
+        elif (received_input.action == stream_conf.actions["ACTION_STOP"]):
             process = None
             print("STOP command " + received_input.read_url + " received")
             for stream in stream_list:
@@ -381,22 +381,22 @@ def decode_input(received_input,stream_list):
             else:
                 result = process.write_stream
 
-        elif (received_input.action == serv_conf.actions["ACTION_CHECK"]):
+        elif (received_input.action == stream_conf.actions["ACTION_CHECK"]):
             #print("CHECK command received")
             try:
-                if(serv_conf.service["STREAM_SERVER"] == STREAM_SERVER_WOWZA):
+                if(stream_conf.service["STREAM_SERVER"] == STREAM_SERVER_WOWZA):
                     r = requests.get(
-                        serv_conf.wowza_stream_stat["url"],
-                        headers=serv_conf.wowza_stream_stat["headers"],
+                        stream_conf.wowza_stream_stat["url"],
+                        headers=stream_conf.wowza_stream_stat["headers"],
                         auth=HTTPDigestAuth(
-                            serv_conf.wowza_stream_stat["auth-user"],
-                            serv_conf.wowza_stream_stat["auth-pass"]
+                            stream_conf.wowza_stream_stat["auth-user"],
+                            stream_conf.wowza_stream_stat["auth-pass"]
                         )
                     )
                     content = json.loads(r.content.decode("utf-8"))
                     result = content["incomingStreams"]
-                elif(serv_conf.service["STREAM_SERVER"] == STREAM_SERVER_NGINX):
-                    response = requests.get(serv_conf.nginx_stream_stat["url"])
+                elif(stream_conf.service["STREAM_SERVER"] == STREAM_SERVER_NGINX):
+                    response = requests.get(stream_conf.nginx_stream_stat["url"])
                     o = xmltodict.parse(response.content)
                     stats_json = o["rtmp"]["server"]["application"]["live"]
                     values= []
@@ -449,8 +449,8 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        host = serv_conf.service["host"]
-        port = serv_conf.service["port"]
+        host = stream_conf.service["host"]
+        port = stream_conf.service["port"]
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)
