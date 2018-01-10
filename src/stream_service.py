@@ -70,7 +70,7 @@ class StreamProcess(multiprocessing.Process):
         cap = cv2.VideoCapture(self.read_url)
         print("Video Capture initialized " + self.read_url)
         #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
-        p =  Popen([stream_conf.service['ffmpeg_path'], '-gpu', '1', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
+        p =  Popen([stream_conf.service['ffmpeg_path'], '-gpu', '1', '-hwaccel', 'cuvid', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vf', 'scale=640:480', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
         print("Popen initialized")
 
         tryCount = 0
