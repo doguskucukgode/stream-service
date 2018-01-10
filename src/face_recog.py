@@ -47,17 +47,17 @@ def get_encodings_of_imgs(image_path_list):
     return all_encodings
 
 
-def save_encodings(all_encodings, filename):
-    with open(face_conf.BASE_FOLDER + "/" + filename + '.pkl', mode='wb') as f:
+def save_encodings(all_encodings, filepath):
+    with open(filepath, mode='wb') as f:
         pickle.dump(all_encodings, f)
-        print("Encodings are saved to the file: " + str(filename) + ".pkl")
+        print("Encodings are saved to the path: ", filepath)
 
 
-def load_encodings(filename):
+def load_encodings(filepath):
     encodings = None
-    with open(face_conf.BASE_FOLDER + "/" + filename + '.pkl', mode='rb') as f:
+    with open(filepath, mode='rb') as f:
         encodings = pickle.load(f)
-        print("Loaded the encodings from: " + str(filename) + ".pkl")
+        print("Loaded the encodings from: ", filepath)
     return encodings
 
 
@@ -76,15 +76,17 @@ def find_key(input_dict, value):
 
 
 def check_n_generate_encodings():
-    print("Loading all known faces")
     full_paths, base_paths = load_image_folder(face_conf.recognition['known_faces_folder'])
+    encodings_file_path = face_conf.recognition['classifier_path']
     # If the encodings for faces are calculated before, load and use them
-    if os.path.exists(face_conf.recognition['encodings_file_name'] + '.pkl'):
-        encodings = load_encodings(face_conf.recognition['encodings_file_name'])
+    if os.path.exists(encodings_file_path):
+        print("Loading all known faces from: ", encodings_file_path)
+        encodings = load_encodings(encodings_file_path)
     else:
-        print("Calculating encodings of known faces")
+        print("Could not load encodings from: ", encodings_file_path)
+        print("Calculating encodings of known faces from scratch..")
         encodings = get_encodings_of_imgs(full_paths)
-        save_encodings(encodings, 'encodings')
+        save_encodings(encodings, encodings_file_path)
     return encodings, base_paths
 
 

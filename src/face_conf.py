@@ -6,6 +6,7 @@ def get_tcp_address(host, port):
 
 SOURCE_FOLDER = os.path.dirname(os.path.realpath(__file__))
 BASE_FOLDER = os.path.dirname(SOURCE_FOLDER)
+MODEL_FOLDER = BASE_FOLDER + "/model"
 
 # Configs
 
@@ -15,12 +16,12 @@ server = {
 }
 
 recognition = {
-    "known_faces_folder" : BASE_FOLDER + "/" + "KnownPeeps",
+    "known_faces_folder" : "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI_faces_known_not_cropped",
+    "classifier_path" : MODEL_FOLDER + "/" + "encodings.pkl",
     "width" : 250,
     "height" : 250,
     "depth" : 3,
     "similarity_threshold" : 0.50,
-    "encodings_file_name" : "encodings",
     "factor" : 2,
     "knn" : 1,
     "not_recog_msg" : "-"
