@@ -16,24 +16,27 @@ import tensorflow as tf
 from keras.models import load_model
 from keras.preprocessing import image
 import keras.backend.tensorflow_backend as K
-from concurrent.futures import ProcessPoolExecutor, TimeoutError
+from openalpr import Alpr
+from concurrent.futures import ProcessPoolExecutor
 
 # Internal imports
-import zmq_comm
-import car_conf
-import plate_conf
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.car_conf import CarConfig
+from conf.plate_conf import PlateConfig
+import helper.zmq_comm as zmq_comm
 
-
-current_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.dirname(current_dir)
-print("Current dir: " + str(current_dir))
-print("Parent dir: " + str(parent_dir))
+print("Current dir: " + str(module_folder))
+print("Parent dir: " + str(base_folder))
 print("Current working dir: " + str(os.getcwd()))
 
 # The scripts that use darkflow must be in the darkflow directory
 # The scripts that use SSD must be in the SSD directory
-sys.path.insert(0, parent_dir + "/SSD-Tensorflow")
-os.chdir(parent_dir + "/SSD-Tensorflow")
+sys.path.insert(0, base_folder + "/SSD-Tensorflow")
+os.chdir(base_folder + "/SSD-Tensorflow")
 
 # For SSD detector
 import cv2
@@ -44,16 +47,20 @@ from nets import ssd_vgg_300, ssd_vgg_512, ssd_common, np_methods
 
 # Since tensorflow does not allow for different memory usages for graphs used in the same process,
 # we cannot make SSD use a different GPU fraction
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=car_conf.crcl["classifier_gpu_memory_frac"])
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=CarConfig.crcl["classifier_gpu_memory_frac"])
 conf = tf.ConfigProto(log_device_placement=False, gpu_options=gpu_options)
 isess = tf.Session(config=conf)
 
 slim = tf.contrib.slim
 # Input placeholder.
 net_shape = (0, 0)
-net_to_use = car_conf.cropper['ssd-net']
-ckpt_filename = car_conf.cropper['ssd-model-path']
+net_to_use = CarConfig.cropper['ssd-net']
+ckpt_filename = CarConfig.cropper['ssd-model-path']
 net_shape = (300, 300) if net_to_use == 'ssd-300' else (512, 512)
+
+# Global variables required by openALPR
+alpr = None
+invalid_plate_pattern = None
 
 
 class SSD_Bundle:
@@ -152,13 +159,13 @@ def classifyIndices(data, preds, n):
 
 # Load trained tensorflow model to classify cars
 def load_model_and_json():
-    json_path = car_conf.crcl["model_folder"] + '/' + car_conf.crcl["classes_json"]
+    json_path = CarConfig.crcl["model_folder"] + '/' + CarConfig.crcl["classes_json"]
     print ("Loading JSON on path: ", json_path)
     json_file = open(json_path, 'r')
     json_read = json_file.read()
     loaded_model_json = json.loads(json_read)
 
-    model_path = car_conf.crcl["model_folder"] + '/' + car_conf.crcl["model_file_name"]
+    model_path = CarConfig.crcl["model_folder"] + '/' + CarConfig.crcl["model_file_name"]
     print ("Loading model on path: ", model_path)
     model = load_model(filepath=model_path)
     return model, loaded_model_json
@@ -203,8 +210,8 @@ def extract_objects(model, image):
 
 
 def crop_image(image, topleft, bottomright, confidence):
-    x_margin_percentage = car_conf.crop_values['x_margin_percentage']
-    y_margin_percentage = car_conf.crop_values['y_margin_percentage']
+    x_margin_percentage = CarConfig.crop_values['x_margin_percentage']
+    y_margin_percentage = CarConfig.crop_values['y_margin_percentage']
 
     y1 = topleft['y']
     y2 = bottomright['y']
@@ -221,55 +228,50 @@ def crop_image(image, topleft, bottomright, confidence):
     margined_height = height + y_margin * 2
 
     actual_height, actual_width, channels = image.shape
-    if confidence > car_conf.crop_values['min_confidence']:
+    if confidence > CarConfig.crop_values['min_confidence']:
         if margined_X + margined_width > actual_width:
             margined_width = actual_width - margined_X
         if margined_Y + margined_height > actual_height:
             margined_height = actual_height - margined_Y
 
-        # Calculating bottomright coordinates
-        margined_Y_BR = margined_Y + margined_height
-        margined_X_BR = margined_X + margined_width
-        # Returning cropped images with margined and original values
-        return image[margined_Y:margined_Y_BR, margined_X:margined_X_BR], image[y1:y2, x1:x2]
-    return None, None
+        y2 = margined_Y + margined_height
+        x2 = margined_X + margined_width
+        return image[margined_Y:y2, margined_X:x2]
+    return None
 
 
-#TODO: Add timeout logic here
-def extract_plate(cropped, is_initialized):
-    # Initialize zmq context and sockets when necessary
-    if not is_initialized:
-        print("Initializing plate sockets")
-        extract_plate.ctx = zmq.Context(io_threads=1)
-        plate_host = plate_conf.plate_server['host']
-        plate_port = plate_conf.plate_server['port']
-
-        plate_address = zmq_comm.get_tcp_address(plate_host, plate_port)
-        extract_plate.plate_client = zmq_comm.init_client(extract_plate.ctx, plate_address)
-        is_initialized = True
-
+def extract_plate(cropped):
+    global alpr
+    global invalid_plate_pattern
     found_plate = ""
-    # Encode and send cropped car to detect plate location
-    cv_encoded_img = cv2.imencode(".jpg", cropped)[1]
-    encoded_img = base64.b64encode(cv_encoded_img)
-    extract_plate.plate_client.send(encoded_img)
-    plate_reply = extract_plate.plate_client.recv()
-    plate_reply = json.loads(plate_reply.decode("utf-8"))
-    # If there is an error, just return an empty plate
-    if plate_reply['message'] != "OK":
-        return found_plate, is_initialized
+    results = alpr.recognize_array(bytes(cv2.imencode('.jpg', cropped)[1]))
+    # print("Results: ", results)
 
-    found_plate = plate_reply['result']
-    return found_plate, is_initialized
+    filtered_candidates = []
+    for plate in results['results']:
+        for candidate in plate['candidates']:
+            # If our regex does not match with a plate, then it is a good candidate
+            if not invalid_plate_pattern.search(candidate['plate']):
+                filtered_candidates.append(candidate['plate'])
+        # WARNING: It is assumed that there is only a single plate in the given image
+        # Hence, we break after the first plate, even if there are more plates
+        break
+
+    if len(filtered_candidates) > 0:
+        found_plate = filtered_candidates[0]
+    return found_plate
 
 
-def handle_requests(ctx, socket):
+def handle_requests(socket):
+    global alpr
+    global invalid_plate_pattern
+
     # Load SSD model
     ssd_model = load_SSD_model()
 
     # Load trained tensorflow car classifier and set tensorflow configs
     tf_config = K.tf.ConfigProto()
-    tf_config.gpu_options.per_process_gpu_memory_fraction = car_conf.crcl["classifier_gpu_memory_frac"]
+    tf_config.gpu_options.per_process_gpu_memory_fraction = CarConfig.crcl["classifier_gpu_memory_frac"]
     K.set_session(K.tf.Session(config=tf_config))
 
     init = K.tf.global_variables_initializer()
@@ -279,9 +281,27 @@ def handle_requests(ctx, socket):
     # Define a concurrent future and an executor to be used in case plate recognition is enabled
     future1 = None
     executor = None
-    is_initialized = False
-    use_plate_recognition = car_conf.crcl["enable_plate_recognition"]
+    use_plate_recognition = CarConfig.crcl["enable_plate_recognition"]
     if use_plate_recognition:
+        print("Plate recognition is on, loading OpenALPR..")
+        # Load configs and Alpr() once
+        country = PlateConfig.recognition['country']
+        region = PlateConfig.recognition['region']
+        openalpr_conf_dir = PlateConfig.recognition['openalpr_conf_dir']
+        openalpr_runtime_data_dir = PlateConfig.recognition['openalpr_runtime_data_dir']
+        top_n = PlateConfig.recognition['top_n']
+
+        # Compile regex that matches with invalid TR plates
+        invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
+        invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+
+        alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
+        if not alpr.is_loaded():
+            print("Error loading OpenALPR")
+            return
+
+        alpr.set_top_n(top_n)
+        alpr.set_default_region(region)
         # Initialize process executor once
         executor = ProcessPoolExecutor(max_workers=1)
 
@@ -294,16 +314,18 @@ def handle_requests(ctx, socket):
         try:
             request = socket.recv()
             image = zmq_comm.decode_request(request)
+
             found_objects = []
             with isess.as_default():
                 found_objects = extract_objects(ssd_model, image)
 
             clasifications = []
             with sess.as_default():
+                # Filter cars, buses and trucks, classify each of them
                 for o in found_objects:
                     # Crop image according to empirical margin values
-                    cropped, cropped_wo_margin = crop_image(image, o['topleft'], o['bottomright'], float(o['confidence']))
-                    if cropped is None or cropped_wo_margin is None:
+                    cropped = crop_image(image, o['topleft'], o['bottomright'], float(o['confidence']))
+                    if cropped is None:
                         continue
 
                     found_plate = ""
@@ -311,21 +333,21 @@ def handle_requests(ctx, socket):
                     filtered_candidates = []
                     # Run plate recognition in parallel while the main thread continues
                     # Note that, if you call 'future.result()' here, it just waits for process to end
-                    # Also notice that, we are sending the original cropped image to plate extraction (a.k.a. no margins)
                     if use_plate_recognition:
-                        future1 = executor.submit(extract_plate, cropped_wo_margin, is_initialized)
-
+                        future1 = executor.submit(extract_plate, cropped)
                     # Preprocess the image
                     cropped = cropped * 1./255
                     cropped = cv2.resize(cropped, (299, 299))
                     cropped = cropped.reshape((1,) + cropped.shape)
+
                     # Feed image to classifier
                     preds = car_classifier_model.predict(cropped)[0]
                     predict_list = classifyIndices(
                         car_classifier_loaded_model_json,
                         preds,
-                        car_conf.crcl["n"]
+                        CarConfig.crcl["n"]
                     )
+
                     predictions = []
                     tags = ["model", "score"]
                     for index, p in enumerate(predict_list):
@@ -333,10 +355,8 @@ def handle_requests(ctx, socket):
 
                     # Wait for plate recognition to finish its job
                     if use_plate_recognition and future1 is not None:
-                        try:
-                            found_plate, is_initialized = future1.result(timeout=car_conf.crcl["plate_service_timeout"])
-                        except TimeoutError as e:
-                            print("Could not get any respond from plate service. Timeout.")
+                        found_plate = future1.result()
+
                     cl = {
                         'label' : o['label'],
                         'confidence' : o['confidence'],
@@ -350,6 +370,7 @@ def handle_requests(ctx, socket):
             result_dict = {}
             result_dict["result"] = clasifications
             result_dict["message"] = "OK"
+
             # print(result_dict)
             socket.send_json(result_dict)
         except Exception as e:
@@ -357,20 +378,17 @@ def handle_requests(ctx, socket):
             result_dict["result"] = []
             result_dict["message"] = str(e)
             socket.send_json(result_dict)
-        finally:
-            #TODO: Implement this
-            pass
 
 
 if __name__ == '__main__':
     socket = None
     try:
-        host = car_conf.crcl["host"]
-        port = car_conf.crcl["port"]
-        tcp_address = zmq_comm.get_tcp_address(host, port)
+        host = CarConfig.crcl["host"]
+        port = CarConfig.crcl["port"]
         ctx = zmq.Context(io_threads=1)
+        tcp_address = zmq_comm.get_tcp_address(host, port)
         socket = zmq_comm.init_server(ctx, tcp_address)
-        handle_requests(ctx, socket)
+        handle_requests(socket)
     except Exception as e:
         print(str(e))
     finally:

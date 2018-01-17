@@ -19,21 +19,23 @@ import keras.backend.tensorflow_backend as K
 from openalpr import Alpr
 
 # Internal imports
-import zmq_comm
-import car_conf
-import plate_conf
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.car_conf import CarConfig
+from conf.plate_conf import PlateConfig
+import helper.zmq_comm as zmq_comm
 
-
-current_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.dirname(current_dir)
-print("Current dir: " + str(current_dir))
-print("Parent dir: " + str(parent_dir))
+print("Current dir: " + str(module_folder))
+print("Parent dir: " + str(base_folder))
 print("Current working dir: " + str(os.getcwd()))
 
 # The scripts that use darkflow must be in the darkflow directory
 # The scripts that use SSD must be in the SSD directory
-sys.path.insert(0, parent_dir + "/SSD-Tensorflow")
-os.chdir(parent_dir + "/SSD-Tensorflow")
+sys.path.insert(0, base_folder + "/SSD-Tensorflow")
+os.chdir(base_folder + "/SSD-Tensorflow")
 
 # For SSD detector
 import cv2
@@ -52,8 +54,8 @@ isess = tf.Session(config=conf)
 slim = tf.contrib.slim
 # Input placeholder.
 net_shape = (0, 0)
-net_to_use = car_conf.cropper['ssd-net']
-ckpt_filename = car_conf.cropper['ssd-model-path']
+net_to_use = CarConfig.cropper['ssd-net']
+ckpt_filename = CarConfig.cropper['ssd-model-path']
 net_shape = (300, 300) if net_to_use == 'ssd-300' else (512, 512)
 
 
@@ -153,13 +155,13 @@ def classifyIndices(data, preds, n):
 
 # Load trained tensorflow model to classify cars
 def load_model_and_json():
-    json_path = car_conf.crcl["model_folder"] + '/' + car_conf.crcl["classes_json"]
+    json_path = CarConfig.crcl["model_folder"] + '/' + CarConfig.crcl["classes_json"]
     print ("Loading JSON on path: ", json_path)
     json_file = open(json_path, 'r')
     json_read = json_file.read()
     loaded_model_json = json.loads(json_read)
 
-    model_path = car_conf.crcl["model_folder"] + '/' + car_conf.crcl["model_file_name"]
+    model_path = CarConfig.crcl["model_folder"] + '/' + CarConfig.crcl["model_file_name"]
     print ("Loading model on path: ", model_path)
     model = load_model(filepath=model_path)
     return model, loaded_model_json
@@ -204,8 +206,8 @@ def extract_objects(model, image):
 
 
 def crop_image(image, topleft, bottomright, confidence):
-    x_margin_percentage = car_conf.crop_values['x_margin_percentage']
-    y_margin_percentage = car_conf.crop_values['y_margin_percentage']
+    x_margin_percentage = CarConfig.crop_values['x_margin_percentage']
+    y_margin_percentage = CarConfig.crop_values['y_margin_percentage']
 
     y1 = topleft['y']
     y2 = bottomright['y']
@@ -222,7 +224,7 @@ def crop_image(image, topleft, bottomright, confidence):
     margined_height = height + y_margin * 2
 
     actual_height, actual_width, channels = image.shape
-    if confidence > car_conf.crop_values['min_confidence']:
+    if confidence > CarConfig.crop_values['min_confidence']:
         if margined_X + margined_width > actual_width:
             margined_width = actual_width - margined_X
         if margined_Y + margined_height > actual_height:
@@ -240,25 +242,25 @@ def handle_requests(socket):
 
     # Load trained tensorflow car classifier and set tensorflow configs
     tf_config = K.tf.ConfigProto()
-    tf_config.gpu_options.per_process_gpu_memory_fraction = car_conf.crcl["classifier_gpu_memory_frac"]
+    tf_config.gpu_options.per_process_gpu_memory_fraction = CarConfig.crcl["classifier_gpu_memory_frac"]
     K.set_session(K.tf.Session(config=tf_config))
 
     init = K.tf.global_variables_initializer()
     sess = K.get_session()
     sess.run(init)
 
-    use_plate_recognition = car_conf.crcl["enable_plate_recognition"]
+    use_plate_recognition = CarConfig.crcl["enable_plate_recognition"]
     if use_plate_recognition:
         print("Plate recognition is on, loading OpenALPR..")
         # Load configs and Alpr() once
-        country = plate_conf.recognition['country']
-        region = plate_conf.recognition['region']
-        openalpr_conf_dir = plate_conf.recognition['openalpr_conf_dir']
-        openalpr_runtime_data_dir = plate_conf.recognition['openalpr_runtime_data_dir']
-        top_n = plate_conf.recognition['top_n']
+        country = PlateConfig.recognition['country']
+        region = PlateConfig.recognition['region']
+        openalpr_conf_dir = PlateConfig.recognition['openalpr_conf_dir']
+        openalpr_runtime_data_dir = PlateConfig.recognition['openalpr_runtime_data_dir']
+        top_n = PlateConfig.recognition['top_n']
 
         # Compile regex that matches with invalid TR plates
-        invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
+        invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
         invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
 
         alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
@@ -307,7 +309,7 @@ def handle_requests(socket):
                     predict_list = classifyIndices(
                         car_classifier_loaded_model_json,
                         preds,
-                        car_conf.crcl["n"]
+                        CarConfig.crcl["n"]
                     )
 
                     predictions = []
@@ -361,8 +363,8 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        host = car_conf.crcl["host"]
-        port = car_conf.crcl["port"]
+        host = CarConfig.crcl["host"]
+        port = CarConfig.crcl["port"]
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)

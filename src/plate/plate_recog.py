@@ -15,10 +15,15 @@ from keras import backend as K
 from keras.models import Model, load_model
 
 # Internal imports
-import zmq_comm
-import plate_conf
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.plate_conf import PlateConfig
+import helper.zmq_comm as zmq_comm
 
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 current_dir = os.path.dirname(os.path.realpath(__file__))
 base_dir = os.path.abspath(os.path.join(current_dir, os.pardir))
 
@@ -74,11 +79,11 @@ def almost_equal(w1, w2):
 
 def handle_requests(socket, plate_recognizer):
     # Load recognition related configs
-    image_width = plate_conf.recognition["image_width"]
-    image_height = plate_conf.recognition["image_height"]
+    image_width = PlateConfig.recognition["image_width"]
+    image_height = PlateConfig.recognition["image_height"]
 
     # Compile regex that matches with invalid TR plates
-    invalid_tr_plate_regex = plate_conf.recognition["invalid_tr_plate_regex"]
+    invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
     invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
     print("Plate recognition is started on: ", tcp_address)
 
@@ -135,7 +140,7 @@ if __name__ == '__main__':
     plate_recognizer = None
 
     # Load plate recognizer once
-    model_path = plate_conf.recognition['model_path']
+    model_path = PlateConfig.recognition['model_path']
     try:
         print("Loading model: ", model_path)
         plate_recognizer = load_model(model_path, compile=False)
@@ -145,8 +150,8 @@ if __name__ == '__main__':
         sys.exit()
 
     try:
-        host = plate_conf.recognizer_server['host']
-        port = plate_conf.recognizer_server['port']
+        host = PlateConfig.recognizer_server['host']
+        port = PlateConfig.recognizer_server['port']
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)

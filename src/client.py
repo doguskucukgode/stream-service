@@ -1,14 +1,18 @@
 # External imports
 import os
+import sys
 import cv2
 import zmq
 import json
 import base64
-import face_conf
+
+SOURCE_FOLDER = os.path.dirname(os.path.realpath(__file__))
+sys.path.insert(0, SOURCE_FOLDER)
 
 # Internal imports
-import zmq_comm
-import car_conf
+import conf.car_conf as car_conf
+import conf.face_conf as face_conf
+import helper.zmq_comm as zmq_comm
 
 
 def read_image_base64(path):
@@ -146,12 +150,12 @@ def annotate_face(image, message, out_path):
 if __name__ == '__main__':
     # Set server info, you may use configs given in configurations
     host = "127.0.0.1"
-    port = "41414"
+    port = "54444"
 
     # Other stuff
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    input_path = "/home/taylan/Desktop/car_images/raw/plate-5.jpg"
-    # input_path = "/home/taylan/gitFolder/face-recognition/KnownPeeps/taylan.jpg"
+    # input_path = "/home/taylan/Desktop/car_images/raw/plate-1.jpg"
+    input_path = "/home/taylan/gitFolder/face-recognition/KnownPeeps/taylan.jpg"
 
     image = cv2.imread(input_path, 1)
     # encoded_img = read_image_base64(input_path)

@@ -7,8 +7,13 @@ import base64
 import numpy as np
 
 # Internal imports
-import zmq_comm
-import plate_conf
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.plate_conf import PlateConfig
+import helper.zmq_comm as zmq_comm
 
 
 def detect_plates(plate_classifier, iteration_inc, strictness, img):
@@ -18,8 +23,8 @@ def detect_plates(plate_classifier, iteration_inc, strictness, img):
 
 
 def handle_requests(socket, plate_detector):
-    iteration_inc = plate_conf.detection["detection_iteration_increase"]
-    strictness = plate_conf.detection["detection_strictness"]
+    iteration_inc = PlateConfig.detection["detection_iteration_increase"]
+    strictness = PlateConfig.detection["detection_strictness"]
     print("Plate detection is started on: ", tcp_address)
 
     while True:
@@ -70,15 +75,15 @@ if __name__ == '__main__':
     plate_detector = None
 
     # Load configs and plate detector once
-    classifier_path = plate_conf.detection['classifier_path']
+    classifier_path = PlateConfig.detection['classifier_path']
     plate_detector = cv2.CascadeClassifier(classifier_path)
     if plate_detector.empty():
         print("Error while loading plate detector at given path: " + classifier_path)
         sys.exit()
 
     try:
-        host = plate_conf.detector_server['host']
-        port = plate_conf.detector_server['port']
+        host = PlateConfig.detector_server['host']
+        port = PlateConfig.detector_server['port']
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)

@@ -1,6 +1,7 @@
 # External imports
 from __future__ import division
 import os
+import sys
 import cv2
 import zmq
 import json
@@ -14,8 +15,13 @@ import face_recognition
 from collections import Counter
 
 # Internal imports
-import zmq_comm
-import face_conf
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.face_conf import FaceConfig
+import helper.zmq_comm as zmq_comm
 
 
 def recognize_face(face_encoding, known_encodings, img_list, knn, similarity_threshold):
@@ -26,7 +32,7 @@ def recognize_face(face_encoding, known_encodings, img_list, knn, similarity_thr
     for i in neighbour_n:
         counts.append(img_list[i])
     if face_distances[neighbour_n[knn-1]] > similarity_threshold:
-        return face_conf.recognition["not_recog_msg"]
+        return FaceConfig.recognition["not_recog_msg"]
     counts = Counter(counts)
     result = counts[max(counts.keys(), key=(lambda k: counts[k]))]
     return counts.most_common()[0][0]
@@ -71,13 +77,9 @@ def load_image_folder(path_to_folder):
     return full_paths, base_paths
 
 
-def find_key(input_dict, value):
-    return next((k for k, v in input_dict.items() if v == value), None)
-
-
 def check_n_generate_encodings():
-    full_paths, base_paths = load_image_folder(face_conf.recognition['known_faces_folder'])
-    encodings_file_path = face_conf.recognition['classifier_path']
+    full_paths, base_paths = load_image_folder(FaceConfig.recognition['known_faces_folder'])
+    encodings_file_path = FaceConfig.recognition['classifier_path']
     # If the encodings for faces are calculated before, load and use them
     if os.path.exists(encodings_file_path):
         print("Loading all known faces from: ", encodings_file_path)
@@ -98,9 +100,9 @@ def tag_images(img_list):
 
 def handle_requests(socket, encodings, img_list):
     # Load configs once
-    factor = face_conf.recognition['factor']
-    knn = face_conf.recognition['knn']
-    similarity_threshold = face_conf.recognition['similarity_threshold']
+    factor = FaceConfig.recognition['factor']
+    knn = FaceConfig.recognition['knn']
+    similarity_threshold = FaceConfig.recognition['similarity_threshold']
 
     while True:
         result_dict = {}
@@ -130,7 +132,7 @@ def handle_requests(socket, encodings, img_list):
             predictions = []
             # Display the results
             for (top, right, bottom, left), match_name in zip(face_locations, face_names):
-                if match_name == face_conf.recognition["not_recog_msg"]:
+                if match_name == FaceConfig.recognition["not_recog_msg"]:
                     continue
                 # Scale back up face locations since the frame we detected in was scaled to 1/4 size
                 top = int(top * factor)
@@ -157,8 +159,8 @@ def handle_requests(socket, encodings, img_list):
 if __name__ == '__main__':
     socket = None
     try:
-        host = face_conf.server["host"]
-        port = face_conf.server["port"]
+        host = FaceConfig.server["host"]
+        port = FaceConfig.server["port"]
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)

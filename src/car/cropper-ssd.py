@@ -5,19 +5,25 @@ import sys
 import zmq
 import json
 import base64
-import car_conf
 import numpy as np
 from PIL import Image
 
-current_dir = os.path.dirname(os.path.realpath(__file__))
-parent_dir = os.path.dirname(current_dir)
-print("Current dir: " + str(current_dir))
-print("Parent dir: " + str(parent_dir))
+# Internal dependencies
+module_folder = os.path.dirname(os.path.realpath(__file__))
+source_folder = os.path.dirname(module_folder)
+base_folder = os.path.dirname(source_folder)
+model_folder = base_folder + "/model"
+sys.path.insert(0, source_folder)
+from conf.car_conf import CarConfig
+import helper.zmq_comm as zmq_comm
+
+print("Current dir: " + str(module_folder))
+print("Parent dir: " + str(base_folder))
 print("Current working dir: " + str(os.getcwd()))
 
 # The scripts that use SSD must be in the SSD directory
-sys.path.insert(0, parent_dir + "/SSD-Tensorflow")
-os.chdir(parent_dir + "/SSD-Tensorflow")
+sys.path.insert(0, base_folder + "/SSD-Tensorflow")
+os.chdir(base_folder + "/SSD-Tensorflow")
 
 # For SSD detector
 import cv2
@@ -25,19 +31,16 @@ import tensorflow as tf
 from preprocessing import ssd_vgg_preprocessing
 from nets import ssd_vgg_300, ssd_vgg_512, ssd_common, np_methods
 
-# Internal dependencies
-import zmq_comm
-
 # TensorFlow session: grow memory when needed
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=car_conf.cropper["gpu_memory_frac"])
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=CarConfig.cropper["gpu_memory_frac"])
 conf = tf.ConfigProto(log_device_placement=False, gpu_options=gpu_options)
 isess = tf.InteractiveSession(config=conf)
 
 slim = tf.contrib.slim
 # Input placeholder.
 net_shape = (0, 0)
-net_to_use = car_conf.cropper['ssd-net']
-ckpt_filename = car_conf.cropper['ssd-model-path']
+net_to_use = CarConfig.cropper['ssd-net']
+ckpt_filename = CarConfig.cropper['ssd-model-path']
 net_shape = (300, 300) if net_to_use == 'ssd-300' else (512, 512)
 
 
@@ -176,8 +179,8 @@ def handle_requests(socket):
 if __name__ == '__main__':
     socket = None
     try:
-        host = car_conf.cropper["host"]
-        port = car_conf.cropper["port"]
+        host = CarConfig.cropper["host"]
+        port = CarConfig.cropper["port"]
         tcp_address = zmq_comm.get_tcp_address(host, port)
         ctx = zmq.Context(io_threads=1)
         socket = zmq_comm.init_server(ctx, tcp_address)
