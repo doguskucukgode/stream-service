@@ -20,6 +20,10 @@ from subprocess import Popen, PIPE
 from service import Service
 import helper.zmq_comm as zmq_comm
 from conf.stream_conf import StreamConfig
+from conf.car_conf import CarConfig
+
+STREAM_SERVER_WOWZA = "wowza"
+STREAM_SERVER_NGINX = "nginx"
 
 class ReceivedInput:
     def __init__(self, input_type, read_url, read_stream, write_stream, action):
@@ -32,7 +36,7 @@ class ReceivedInput:
 
 class StreamProcess(multiprocessing.Process):
     def __init__(self, read_stream, write_stream, stype, sid, read_url, write_url):
-        super().__init__(self)
+        multiprocessing.Process.__init__(self)
         self.exit = multiprocessing.Event()
         self.read_stream = read_stream
         self.write_stream = write_stream
@@ -112,7 +116,7 @@ class StreamProcess(multiprocessing.Process):
 
     def send_stream(self, frame, popen, i, decoded_msg, counter):
         try:
-            if i % stream_conf.stream["INTERVAL"] == 0:
+            if i % StreamConfig.stream["INTERVAL"] == 0:
                 try:
                     cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
@@ -128,26 +132,26 @@ class StreamProcess(multiprocessing.Process):
                 return_status = decoded_msg['message']
                 if return_status == 'OK' and len(results) > 0:
                     recognized_name = ''
-                    if self.stype == stream_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                    if self.stype == StreamConfig.stream["TYPE_CAR_CLASSIFICATION"] :
                         annotated_img = self.annotate_crcl(frame, results)
-                    elif self.stype == stream_conf.stream["TYPE_FACE_DETECTION"] :
+                    elif self.stype == StreamConfig.stream["TYPE_FACE_DETECTION"] :
                         annotated_img, recognized_name = self.annotate_face(frame, results)
                     cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                     im = Image.fromarray(cv2_im)
                     counter = 0
                     '''
-                    while counter < stream_conf.stream["COPY_COUNT"]:
+                    while counter < StreamConfig.stream["COPY_COUNT"]:
                         im.save(popen.stdin, 'JPEG')
                         counter = counter + 1
                     '''
 
                     # In demo mode, we save the recognized faces in a
-                    if stream_conf.ipcam_demo["in_demo_mode"]:
+                    if StreamConfig.ipcam_demo["in_demo_mode"]:
                         ts = time.time()
                         formatted_ts = datetime.datetime.fromtimestamp(ts)\
-                            .strftime(stream_conf.ipcam_demo["timestamp_format"])
+                            .strftime(StreamConfig.ipcam_demo["timestamp_format"])
                         filename = formatted_ts + '_' + recognized_name + '.jpg'
-                        path_to_save = stream_conf.ipcam_demo['recog_save_path']\
+                        path_to_save = StreamConfig.ipcam_demo['recog_save_path']\
                             + "/" + filename
                         cv2.imwrite(path_to_save, annotated_img)
 
@@ -155,15 +159,15 @@ class StreamProcess(multiprocessing.Process):
                 else:
                     im.save(popen.stdin, 'JPEG')
             else :
-                if decoded_msg is not None and counter < stream_conf.stream["COPY_COUNT"]:
+                if decoded_msg is not None and counter < StreamConfig.stream["COPY_COUNT"]:
                     #send with coordinate
                     counter += 1
                     results = decoded_msg['result']
                     return_status = decoded_msg['message']
                     if return_status == 'OK' and len(results) > 0:
-                        if self.stype == stream_conf.stream["TYPE_CAR_CLASSIFICATION"] :
+                        if self.stype == StreamConfig.stream["TYPE_CAR_CLASSIFICATION"] :
                             annotated_img = self.annotate_crcl(frame, results)
-                        elif self.stype == stream_conf.stream["TYPE_FACE_DETECTION"] :
+                        elif self.stype == StreamConfig.stream["TYPE_FACE_DETECTION"] :
                             annotated_img, recognized_name = self.annotate_face(frame, results)
                         cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
                         im = Image.fromarray(cv2_im)
@@ -196,8 +200,8 @@ class StreamProcess(multiprocessing.Process):
                 label = res['label']
                 confidence = float(res['confidence'])
                 predictions = res['predictions']
-                if confidence > car_conf.crop_values['min_confidence'] and\
-                    float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
+                if confidence > CarConfig.crop_values['min_confidence'] and\
+                    float(predictions[0]['score']) > CarConfig.classifier['min_confidence']:
                     #color = (220, 152, 52)
                     if predictions[0]['model'] not in self.color_map:
                         self.color_map[predictions[0]['model']] = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
@@ -303,7 +307,7 @@ class StreamService(Service):
         #virtual method, that's why it needs to stay here
         pass
 
-    def decode_request(request):
+    def decode_request(self, request):
         try:
             json_data = json.loads(request.decode("utf-8"))
             return json_data
@@ -312,7 +316,7 @@ class StreamService(Service):
             print(message + str(e))
             raise Exception(message)
 
-    def decode_json(json_data):
+    def decode_json(self, json_data):
         try:
             message = json_data["message"]
             received_input = ReceivedInput(
@@ -367,6 +371,7 @@ class StreamService(Service):
             process.start()
             self.stream_list.append(process)
             result = process.write_stream
+            print(result)
         return message, result
 
     def stop_stream(self, received_input):
