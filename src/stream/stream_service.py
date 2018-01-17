@@ -352,7 +352,7 @@ class StreamService(Service):
             result = "Already in use"
             message = "FAIL"
             print(result)
-            break
+            return message, result
 
         # If the process that we like to start is a new one
         if result is None:
@@ -379,7 +379,7 @@ class StreamService(Service):
             process = stream
             stream.shutdown()
             self.stream_list.remove(stream)
-            break
+            return message, result
 
         if process is None:
             result = "Stream not found"
@@ -438,6 +438,7 @@ class StreamService(Service):
                 message, result = self.check_stream(received_input)
             else:
                 raise ValueError("Unexpected command received.")
+            #TODO: None check for message and result
             return message, result
         except Exception as e:
             message = "Cannot decode input."
@@ -445,6 +446,7 @@ class StreamService(Service):
             raise Exception(message)
 
     def handle_requests(self):
+        print("Stream server is started on: ", self.address)
         stream_list = []
         while True:
             result_dict = {}

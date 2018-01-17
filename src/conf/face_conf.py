@@ -8,7 +8,7 @@ class FaceConfig(BaseConfig):
     }
 
     recognition = {
-        "known_faces_folder" : "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI_faces_known_not_cropped",
+        "known_faces_folder" : BaseConfig.base_folder + "/" + "KnownPeeps",
         "classifier_path" : BaseConfig.model_folder + "/" + "encodings.pkl",
         "width" : 250,
         "height" : 250,
