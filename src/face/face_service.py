@@ -22,6 +22,7 @@ class FaceService(Service):
 
     def __init__(self, machine=None):
         super().__init__(machine)
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.configs.server["gpu_to_use"]
         self.encodings, self.img_list = self.load()
         self.handle_requests()
 

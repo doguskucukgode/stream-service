@@ -4,7 +4,8 @@ class FaceConfig(BaseConfig):
 
     server = {
         "host" : "127.0.0.1",
-        "port" : "54444"
+        "port" : "54444",
+        "gpu_to_use" : "1"
     }
 
     recognition = {

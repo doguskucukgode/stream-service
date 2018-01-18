@@ -38,6 +38,7 @@ class CropperService(Service):
 
     def __init__(self, machine=None):
         super().__init__(machine)
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.configs.cropper["gpu_to_use"]
         # TensorFlow session: grow memory when needed
         self.gpu_options = tf.GPUOptions(
             per_process_gpu_memory_fraction=self.configs.cropper["gpu_memory_frac"]

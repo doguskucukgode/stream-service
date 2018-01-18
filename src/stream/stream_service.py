@@ -1,4 +1,5 @@
 # External imports
+import os
 import io
 import zmq
 import sys
@@ -294,6 +295,7 @@ class StreamService(Service):
 
     def __init__(self, machine=None):
         super().__init__(machine)
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.configs.service["gpu_to_use"]
         self.stream_list = []
         self.load()
         self.handle_requests()

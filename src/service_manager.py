@@ -5,7 +5,7 @@ import argparse
 # Internal imports
 from car.crcl_service import CRCLService
 from car.cropper_service import CropperService
-#from face.face_service import FaceService
+# from face.face_service import FaceService
 from plate.plate_service import PlateService
 from stream.stream_service import StreamService
 
@@ -40,9 +40,9 @@ if __name__ == '__main__':
         elif parsed.serv_type == "cropper":
             print("Starting cropper service")
             s = CropperService(machine=parsed.machine_name)
- #       elif parsed.serv_type == "face":
- #           print("Starting face service")
- #           s = FaceService(machine=parsed.machine_name)
+        # elif parsed.serv_type == "face":
+        #    print("Starting face service")
+        #    s = FaceService(machine=parsed.machine_name)
         elif parsed.serv_type == "plate":
             print("Starting plate service")
             s = PlateService(machine=parsed.machine_name)

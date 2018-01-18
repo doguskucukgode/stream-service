@@ -9,7 +9,8 @@ class CarConfig(BaseConfig):
         # You should use appropriate net and pre-trained model obviously
         "ssd-net" : "ssd-300",
         "ssd-model-path": BaseConfig.base_folder + "/SSD-Tensorflow/checkpoints/ssd_300_vgg.ckpt",
-        "gpu_memory_frac" : 0.2
+        "gpu_memory_frac" : 0.2,
+        "gpu_to_use" : "1"
     }
 
     crop_values = {
@@ -78,5 +79,6 @@ class CarConfig(BaseConfig):
         # "ssd_gpu_memory_frac" : 0.3,
         "classifier_gpu_memory_frac" : 0.8,
         "enable_plate_recognition" : True,
-        "plate_service_timeout" : 0.5
+        "plate_service_timeout" : 0.5,
+        "gpu_to_use" : "0"
     }

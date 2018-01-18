@@ -9,7 +9,8 @@ class StreamConfig(BaseConfig):
         "ZMQ_URL_FACE" : "tcp://localhost:54444",
         "STREAM_URL" : "rtmp://0.0.0.0:1935/live",
         "STREAM_SERVER" : "nginx", #nginx or wowza
-        "ffmpeg_path" : "/home/dogus/ffmpeg_install/FFmpeg/ffmpeg"
+        "ffmpeg_path" : "/home/dogus/ffmpeg_install/FFmpeg/ffmpeg",
+        "gpu_to_use" : "1"
     }
 
     # Available actions

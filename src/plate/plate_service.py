@@ -21,6 +21,8 @@ import helper.zmq_comm as zmq_comm
 class PlateService(Service):
 
     def __init__(self, machine=None):
+        super().__init__(machine)
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.configs.plate_server["gpu_to_use"]
         self.plate_detector = None
         self.plate_recognizer = None
         self.alphabet = {
@@ -29,9 +31,7 @@ class PlateService(Service):
             19: 'J',  20: 'K',  21: 'L',  22: 'M',  23: 'N',  24: 'O',  25: 'P',  26: 'R',  27: 'S',
             28: 'T',  29: 'U',  30: 'V',  31: 'Y',  32: 'Z',  33: ' '
         }
-        super().__init__(machine)
 
-        # os.environ["CUDA_VISIBLE_DEVICES"]="1"
         self.tf_config = K.tf.ConfigProto()
         self.tf_config.gpu_options.allow_growth = True
         self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.8

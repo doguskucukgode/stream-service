@@ -57,6 +57,7 @@ class CRCLService(Service):
 
     def __init__(self, machine=None):
         super().__init__(machine)
+        os.environ["CUDA_VISIBLE_DEVICES"] = self.configs.crcl["gpu_to_use"]
         # Since tensorflow does not allow for different memory usages for graphs used in the same process,
         # we cannot make SSD use a different GPU fraction
         self.gpu_options = tf.GPUOptions(
