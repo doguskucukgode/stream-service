@@ -1,0 +1,87 @@
+#ubuntu 16.04.3
+sudo apt-get upgrade
+
+#nvidia driver
+sudo apt-get remove nvidia*
+sudo add-apt-repository ppa:xorg-edgers/ppa
+sudo apt-get update
+sudo apt-get install nvidia-current
+
+reboot
+
+sudo service lightdm stop
+sudo cd ~/Downloads
+sudo chmod +x NVIDIA-Linux-x86_64-384.111.run
+sudo ./NVIDIA-Linux-x86_64-384.111.run
+
+#cuda install
+sudo dpkg -i cuda-repo-ubuntu1604_9.1.85-1_amd64.deb
+sudo apt-key adv --fetch-keys http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1604/x86_64/7fa2af80.pub
+sudo apt-get update
+sudo apt-get install cuda
+
+## write in .profile ##
+export PATH=/usr/local/cuda-9.1/bin${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=/usr/local/cuda-9.1/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+
+#cudnn
+tar -xzvf cudnn-9.1-linux-x64-v7.tgz
+sudo cp cuda/include/cudnn.h /usr/local/cuda/include
+sudo cp cuda/lib64/libcudnn* /usr/local/cuda/lib64
+sudo chmod a+r /usr/local/cuda/include/cudnn.h
+
+#chrome
+wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+echo 'deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main' | sudo tee /etc/apt/sources.list.d/google-chrome.list
+sudo apt-get update 
+sudo apt-get install google-chrome-stable
+
+#tensorflow
+sudo apt-get install libcupti-dev
+sudo apt-get install python3-pip python3-dev
+
+echo "deb [arch=amd64] http://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+curl https://bazel.build/bazel-release.pub.gpg | sudo apt-key add -
+sudo apt-get update
+sudo apt-get install bazel
+sudo apt-get upgrade bazel
+sudo apt install git
+git clone https://github.com/tensorflow/tensorflow
+cd ~/tensorflow
+git checkout r1.2
+./configure
+
+
+#opencv
+sudo apt-get install --assume-yes build-essential cmake git
+sudo apt-get install --assume-yes pkg-config unzip ffmpeg qtbase5-dev python-dev python3-dev python-numpy python3-numpy
+sudo apt-get install --assume-yes libopencv-dev libgtk-3-dev libdc1394-22 libdc1394-22-dev libjpeg-dev libpng12-dev libtiff5-dev libjasper-dev
+sudo apt-get install --assume-yes libavcodec-dev libavformat-dev libswscale-dev libxine2-dev libgstreamer0.10-dev libgstreamer-plugins-base0.10-dev
+sudo apt-get install --assume-yes libv4l-dev libtbb-dev libfaac-dev libmp3lame-dev libopencore-amrnb-dev libopencore-amrwb-dev libtheora-dev
+sudo apt-get install --assume-yes libvorbis-dev libxvidcore-dev v4l-utils vtk6
+sudo apt-get install --assume-yes liblapacke-dev libopenblas-dev libgdal-dev checkinstall
+
+mkdir build
+cd build/    
+cmake -D CMAKE_BUILD_TYPE=RELEASE -D CMAKE_INSTALL_PREFIX=/usr/local -D FORCE_VTK=ON -D WITH_TBB=ON -D WITH_V4L=ON -D WITH_QT=ON -D WITH_OPENGL=ON -D WITH_CUBLAS=ON -D CUDA_NVCC_FLAGS="-D_FORCE_INLINES" -D WITH_GDAL=ON -D WITH_XINE=ON -D BUILD_EXAMPLES=ON -D WITH_FFMPEG=1 ..
+make -j $(($(nproc) + 1))
+sudo make install
+
+
+#keras
+
+pip3 install numpy scipy
+pip3 install scikit-learn
+pip3 install pillow
+pip3 install h5py
+pip3 install keras
+
+
+#nginx
+sudo apt-get install nginx
+
+#obs
+sudo apt-add-repository ppa:obsproject/obs-studio
+sudo apt-get update
+sudo apt-get install ffmpeg obs-studio
+
