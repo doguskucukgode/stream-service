@@ -17,6 +17,7 @@ class Service:
             self.socket = zmqc.init_server(self.ctx, self.address)
         except Exception as e:
             print(str(e))
+            self.terminate()
 
     def configure(self, machine=None):
         self.configs = self.config_man.get_configurations(self.__class__.__name__, machine)
