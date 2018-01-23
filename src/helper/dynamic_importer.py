@@ -9,8 +9,7 @@ class DynamicImporter:
         # WARNING: when the package name 'conf' is changed, the line below
         # must be changed as well.
         self.conf_module = importlib.import_module("conf")
-        print(self.conf_module.__dict__.keys())
-
+        # print(self.conf_module.__dict__.keys())
 
     def import_dynamically(self, service_name, machine_id):
         if service_name in ["CRCLService", "CropperService"]:
@@ -43,9 +42,9 @@ class DynamicImporter:
             # Basically a similar importing process is repeated
             try:
                 machine_conf_file = getattr(self.conf_module, machine_id)
-                print(machine_conf_file)
+                # print(machine_conf_file)
                 classes_in_machine_conf = inspect.getmembers(machine_conf_file, predicate=inspect.isclass)
-                print(classes_in_machine_conf)
+                # print(classes_in_machine_conf)
                 for class_name, c in classes_in_machine_conf:
                     if issubclass(c, klass):
                         klass = c
