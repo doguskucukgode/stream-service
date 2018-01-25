@@ -47,142 +47,125 @@ class StreamProcess(multiprocessing.Process):
         self.stype = stype
         self.color_map = {}
         self.socket = None
-        self.ctx = zmq.Context(io_threads=1)
+        self.ctx = None
+        self.read_popen = None
+        self.write_popen = None
 
     def run(self):
+        self.ctx = zmq.Context(io_threads=1)
         if self.stype == StreamConfig.stream["TYPE_CAR_CLASSIFICATION"]:
             self.socket = zmq_comm.init_client(self.ctx, StreamConfig.service["ZMQ_URL_CR_CL"])
         elif self.stype == StreamConfig.stream["TYPE_FACE_DETECTION"]:
             self.socket = zmq_comm.init_client(self.ctx, StreamConfig.service["ZMQ_URL_FACE"])
-
-        print("Client initialized")
-        print("Connecting stream " + self.read_url + "...")
-        cap = cv2.VideoCapture(self.read_url)
-        print("Video Capture initialized " + self.read_url)
-        #p =  Popen(['ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url], stdin=PIPE)
-        p =  Popen([
-            StreamConfig.service['ffmpeg_path'], '-gpu', StreamConfig.service["gpu_to_use"], '-hwaccel', 'cuvid',
-            '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vf', 'scale=640:480',
-            '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url
-            ], stdin=PIPE
-        )
-        print("Popen initialized")
-
-        tryCount = 0
-        i = 0
-        decoded_msg = None
-        counter = 0
-        while not self.exit.is_set():
-            i = (i + 1) % 100
-            ret, frame = cap.read()
-            #print("Frame read, capture : " + str(ret))
-            if ret is True:
-                #print("Frame read ",i)
-                try:
-                    decoded_msg,counter = self.send_stream(frame, p, i, decoded_msg, counter)
-                    tryCount = 0
-                except Exception as e:
-                    tryCount, cap, p, end_loop = self.reconnect(tryCount, p)
-                    if(end_loop):
-                        break
-            else:
-                tryCount, cap, p, end_loop = self.reconnect(tryCount, p)
-                if(end_loop):
-                    break
-        p.stdin.close()
-        p.wait()
-        print (self.write_url + " exited!")
-
-    def reconnect(self, tryCount, p):
-        #wait for some time
-        time.sleep(StreamConfig.stream["RECONNECT_TIME_OUT"])
-        if tryCount == StreamConfig.stream["RECONNECT_TRY_COUNT"]:
-            end_loop = True
-            return tryCount, None, None, True
         else:
-            p.stdin.close()
-            p.wait()
-            print("Reconnecting stream " + self.read_url + "...")
-            cap = cv2.VideoCapture(self.read_url)
-            print("Video Capture reinitialized " + self.read_url)
-            #p =  Popen(['/home/dogus/ffmpeg_install/FFmpeg/ffmpeg','-gpu', StreamConfig.service["gpu_to_use"],'-hwaccel','cuvid','-f', 'image2pipe','-vcodec', 'mjpeg','-i','-','-vcodec','h264','-an','-f','flv',self.write_url], stdin=PIPE)
-            p =  Popen([
-                'ffmpeg', '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-',
-                '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url
-                ], stdin=PIPE
-            )
-            print("Popen reinitialized")
-            tryCount = tryCount + 1
-            return tryCount, cap, p, False
+            print("Invalid service type is given. Terminating the process..")
+            self.shutdown()
+        print("Client initialized")
 
-    def send_stream(self, frame, popen, i, decoded_msg, counter):
+        counter = 0
+        tryCount = 0
+        # Interval control decides whether we process the frame or sent a previously processed copy
+        interval_ctl = 0
+        decoded_msg = None
+        print('Trying to read stream..')
+        while not self.exit.is_set():
+            try:
+                # If subprocesses are not initialized, or they are dead, reinit them
+                if self.read_popen is None or self.read_popen.poll() is not None:
+                    self.read_popen = Popen([
+                        '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-gpu', '0', '-hwaccel', 'cuvid',
+                        '-i', self.read_url, '-pix_fmt', 'rgb24', '-vcodec', 'rawvideo', '-an', '-sn', '-f', 'image2pipe', '-'
+                    ], stdout=PIPE, bufsize=10**8)
+                    print("read_popen initialized.")
+
+                if self.write_popen is None or self.write_popen.poll() is not None:
+                    self.write_popen = Popen([
+                         '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-gpu', '0', '-hwaccel', 'cuvid',
+                        '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vf', 'scale=640:480',
+                        '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url
+                    ], stdin=PIPE)
+                    print("write_popen initialized.")
+
+                interval_ctl = (interval_ctl + 1) % 100
+                # Read a single frame
+                outs = self.read_popen.stdout.read(900*600*3)
+                im = np.fromstring(outs, dtype='uint8')
+                im = im.reshape((600, 900, 3))
+                # The line below reverses the order of dimensions, what it does here: BGR -> RGB
+                im = im[:,:,::-1]
+                im = im.copy(order='C')
+                # Process the received frame
+                frame, decoded_msg, counter = self.process_frame(im, decoded_msg, interval_ctl, counter)
+                # Reorder the image again for PIL Image format
+                im = im[:,:,::-1]
+                im = Image.fromarray(im)
+                im.save(self.write_popen.stdin, 'JPEG')
+            except ValueError as e:
+                print("Received error: ", str(e))
+                sys.stdout.flush()
+                sys.stdin.flush()
+                sys.stderr.flush()
+                self.read_popen.kill()
+                self.write_popen.kill()
+                time.sleep(0.1)
+                print("Retrying..")
+                continue
+            except Exception as e:
+                raise e
+        print("DONE")
+
+    def process_frame(self, frame, decoded_msg, interval_ctl, counter):
         try:
-            if i % StreamConfig.stream["INTERVAL"] == 0:
-                try:
-                    cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    im = Image.fromarray(cv2_im)
-                    encoded_img = self.read_image_base64_pil(im)
-                    self.socket.send(encoded_img)
-                    message = self.socket.recv()
-                    #print ("Received reply: ", message)
-                except Exception as e:
-                    print(str(e))
-
+            if interval_ctl % StreamConfig.stream["INTERVAL"] == 0:
+                # Process the frame
+                im = Image.fromarray(frame)
+                encoded_img = self.read_image_base64_pil(im)
+                self.socket.send(encoded_img)
+                message = self.socket.recv()
                 decoded_msg = json.loads(message.decode("utf-8"))
                 results = decoded_msg['result']
                 return_status = decoded_msg['message']
+
                 if return_status == 'OK' and len(results) > 0:
+                    # Annotate the frame and then send it
                     recognized_name = ''
                     if self.stype == StreamConfig.stream["TYPE_CAR_CLASSIFICATION"] :
                         annotated_img = self.annotate_crcl(frame, results)
                     elif self.stype == StreamConfig.stream["TYPE_FACE_DETECTION"] :
                         annotated_img, recognized_name = self.annotate_face(frame, results)
-                    cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                    im = Image.fromarray(cv2_im)
+                    frame = annotated_img
                     counter = 0
-                    '''
-                    while counter < StreamConfig.stream["COPY_COUNT"]:
-                        im.save(popen.stdin, 'JPEG')
-                        counter = counter + 1
-                    '''
 
-                    # In demo mode, we save the recognized faces in a
+                    # In demo mode, we save the recognized faces into a folder
                     if StreamConfig.ipcam_demo["in_demo_mode"]:
                         ts = time.time()
-                        formatted_ts = datetime.datetime.fromtimestamp(ts)\
-                            .strftime(StreamConfig.ipcam_demo["timestamp_format"])
+                        formatted_ts = datetime.datetime.fromtimestamp(ts).strftime(StreamConfig.ipcam_demo["timestamp_format"])
                         filename = formatted_ts + '_' + recognized_name + '.jpg'
-                        path_to_save = StreamConfig.ipcam_demo['recog_save_path']\
-                            + "/" + filename
+                        path_to_save = StreamConfig.ipcam_demo['recog_save_path'] + "/" + filename
                         cv2.imwrite(path_to_save, annotated_img)
-
-                    im.save(popen.stdin, 'JPEG')
                 else:
-                    im.save(popen.stdin, 'JPEG')
-            else :
+                    # If 'return_status' is not 'OK', send back the frame without any processing
+                    pass
+            else:
+                # Send a copy
                 if decoded_msg is not None and counter < StreamConfig.stream["COPY_COUNT"]:
                     #send with coordinate
                     counter += 1
                     results = decoded_msg['result']
                     return_status = decoded_msg['message']
                     if return_status == 'OK' and len(results) > 0:
+                        # Annotate the frame and then send it
                         if self.stype == StreamConfig.stream["TYPE_CAR_CLASSIFICATION"] :
                             annotated_img = self.annotate_crcl(frame, results)
                         elif self.stype == StreamConfig.stream["TYPE_FACE_DETECTION"] :
-                            annotated_img, recognized_name = self.annotate_face(frame, results)
-                        cv2_im = cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB)
-                        im = Image.fromarray(cv2_im)
-                        im.save(popen.stdin, 'JPEG')
+                            annotated_img, _ = self.annotate_face(frame, results)
+                        frame = annotated_img
                 else:
                     decoded_msg = None
-                    cv2_im = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    im = Image.fromarray(cv2_im)
-                    im.save(popen.stdin, 'JPEG')
-            return decoded_msg,counter
+            return frame, decoded_msg, counter
+
         except Exception as e:
             print(str(e))
-            #Broken pipe error try reconnect
-            raise e
 
     def read_image_base64_pil(self, im):
         try:
@@ -252,7 +235,7 @@ class StreamProcess(multiprocessing.Process):
             print(str(e))
         return image
 
-    def annotate_face(self,image, results):
+    def annotate_face(self, image, results):
         name = ''
         try:
             #results = json.loads(message.decode("utf-8"))['result']
@@ -289,7 +272,21 @@ class StreamProcess(multiprocessing.Process):
 
     def shutdown(self):
         print ("Shutdown initiated ", self.read_url)
+        if self.socket is None:
+            print("Socket is none!")
+        else:
+            self.socket.close()
+            print("Socket closed properly")
+
+        # Terminate subprocesses, if they are still running
+        #TODO: Maybe flush stdin, stdout before terminating them?
+        if self.read_popen is not None and self.read_popen.poll() is None:
+            self.read_popen.terminate()
+        if self.write_popen is not None and self.write_popen.poll() is None:
+            self.write_popen.terminate()
+
         self.exit.set()
+
 
 class StreamService(Service):
 
@@ -372,8 +369,8 @@ class StreamService(Service):
             )
             process.start()
             self.stream_list.append(process)
+            print(self.stream_list)
             result = process.write_stream
-            print(result)
         return message, result
 
     def stop_stream(self, received_input):
@@ -383,6 +380,7 @@ class StreamService(Service):
         print("STOP command " + received_input.read_url + " received")
         exists, stream = self.does_stream_exist(received_input.write_url)
         if exists:
+            print("Shutting down and removing process: ", stream)
             process = stream
             stream.shutdown()
             self.stream_list.remove(stream)
