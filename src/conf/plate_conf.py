@@ -5,19 +5,19 @@ class PlateConfig(BaseConfig):
     detector_server = {
         "host" : "127.0.0.1",
         "port" : "42424",
-        "gpu_to_use" : "1"
+        "gpu_to_use" : "0"
     }
 
     recognizer_server = {
         "host" : "127.0.0.1",
         "port" : "43434",
-        "gpu_to_use" : "1"
+        "gpu_to_use" : "0"
     }
 
     plate_server = {
         "host" : "127.0.0.1",
         "port" : "41414",
-        "gpu_to_use" : "1"
+        "gpu_to_use" : "0"
     }
 
     detection = {
