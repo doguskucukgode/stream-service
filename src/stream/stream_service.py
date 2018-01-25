@@ -50,6 +50,9 @@ class StreamProcess(multiprocessing.Process):
         self.ctx = None
         self.read_popen = None
         self.write_popen = None
+        self.width = StreamConfig.stream["width"]
+        self.height = StreamConfig.stream["height"]
+        self.channels = StreamConfig.stream["channels"]
 
     def run(self):
         self.ctx = zmq.Context(io_threads=1)
@@ -88,9 +91,9 @@ class StreamProcess(multiprocessing.Process):
 
                 interval_ctl = (interval_ctl + 1) % 100
                 # Read a single frame
-                outs = self.read_popen.stdout.read(900*600*3)
+                outs = self.read_popen.stdout.read(self.width * self.height * self.channels)
                 im = np.fromstring(outs, dtype='uint8')
-                im = im.reshape((600, 900, 3))
+                im = im.reshape((self.height, self.width, self.channels))
                 # The line below reverses the order of dimensions, what it does here: BGR -> RGB
                 im = im[:,:,::-1]
                 im = im.copy(order='C')

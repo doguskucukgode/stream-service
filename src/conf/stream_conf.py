@@ -22,6 +22,9 @@ class StreamConfig(BaseConfig):
 
     # Stream-related configs
     stream = {
+        "width" : 900,
+        "height" : 600,
+        "channels" : 3,
         "TYPE_CAR_CLASSIFICATION" : 2,
         "TYPE_FACE_DETECTION" : 1,
         "INTERVAL" : 12,
