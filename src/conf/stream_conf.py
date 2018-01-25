@@ -45,7 +45,7 @@ class StreamConfig(BaseConfig):
     }
 
     ipcam_demo = {
-        "in_demo_mode" : True,
+        "in_demo_mode" : False,
         "recog_save_path" : "/var/stream_files/face_logs",
         "timestamp_format" : "%Y-%m-%d_%H:%M:%S",
     }
