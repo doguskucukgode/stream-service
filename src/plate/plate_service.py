@@ -93,8 +93,8 @@ class PlateService(Service):
         required_image_width = self.configs.recognition["image_width"]
         required_image_height = self.configs.recognition["image_height"]
         # Compile regex that matches with invalid TR plates
-        invalid_tr_plate_regex = self.configs.recognition["invalid_tr_plate_regex"]
-        invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+        tr_plate_regex = self.configs.recognition["tr_plate_regex"]
+        plate_pattern = re.compile(tr_plate_regex)
         net_inp = self.plate_recognizer.get_layer(name='the_input').input
         net_out = self.plate_recognizer.get_layer(name='softmax').output
         print("Plate server is started on: ", self.address)
@@ -180,8 +180,8 @@ class PlateService(Service):
                     pred_texts = self.decode_batch(net_out_value)
                     filtered_candidates = []
                     for plate_text in pred_texts:
-                        # If our regex does not match with a plate, then it is a good candidate
-                        if not invalid_plate_pattern.search(plate_text):
+                        # If our regex matches with a plate, then it is a good candidate
+                        if plate_pattern.search(plate_text):
                             filtered_candidates.append(plate_text)
 
                     if len(filtered_candidates) > 0:

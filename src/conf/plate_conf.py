@@ -50,6 +50,6 @@ class PlateConfig(BaseConfig):
         "image_width" : 128,
         "image_height" : 32,
 
-        # Regex for invalid Turkish plates. If our regex does not match with a plate, then it is a good candidate.
-        "invalid_tr_plate_regex" : '^(?![0-7][0-9]|80|81).*|(^[A-Z])|(^[0-9]{3})|(Q|X|W)|([A-Z]$)|([A-Z].*[0-9].*[A-Z])'
+        # Regex for Turkish plates. If our regex matches with a plate, then it is a good candidate.
+        "tr_plate_regex" : '^(?!00)^([0-7][0-9]|80|81)\s(([A-Z]{1}\s\d{4}$)|([A-Z]{2}\s\d{3,4}$)|([A-Z]{3}\s\d{2,3}$))'
     }

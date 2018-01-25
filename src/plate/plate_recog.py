@@ -83,8 +83,8 @@ def handle_requests(socket, plate_recognizer):
     image_height = PlateConfig.recognition["image_height"]
 
     # Compile regex that matches with invalid TR plates
-    invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
-    invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+    tr_plate_regex = PlateConfig.recognition["tr_plate_regex"]
+    plate_pattern = re.compile(tr_plate_regex)
     print("Plate recognition is started on: ", tcp_address)
 
     net_inp = plate_recognizer.get_layer(name='the_input').input

@@ -10,8 +10,8 @@ SOURCE_FOLDER = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, SOURCE_FOLDER)
 
 # Internal imports
-import conf.car_conf as car_conf
-import conf.face_conf as face_conf
+from conf.car_conf import CarConfig
+from conf.face_conf import FaceConfig
 import helper.zmq_comm as zmq_comm
 
 
@@ -70,8 +70,8 @@ def annotate_crcl(image, message, out_path):
         label = res['label']
         confidence = float(res['confidence'])
         predictions = res['predictions']
-        if confidence > car_conf.crop_values['min_confidence']:# and\
-            # float(predictions[0]['score']) > car_conf.classifier['min_confidence']:
+        if confidence > CarConfig.crop_values['min_confidence']:# and\
+            # float(predictions[0]['score']) > CarConfig.classifier['min_confidence']:
             print("Results fulfill the requirements, annotating the image..")
             topleft = res['topleft']
             bottomright = res['bottomright']

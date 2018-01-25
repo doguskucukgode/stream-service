@@ -260,8 +260,8 @@ def handle_requests(socket):
         top_n = PlateConfig.recognition['top_n']
 
         # Compile regex that matches with invalid TR plates
-        invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
-        invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+        tr_plate_regex = PlateConfig.recognition["tr_plate_regex"]
+        plate_pattern = re.compile(tr_plate_regex)
 
         alpr = Alpr(country, openalpr_conf_dir, openalpr_runtime_data_dir)
         if not alpr.is_loaded():
@@ -327,8 +327,10 @@ def handle_requests(socket):
                         for i, plate in enumerate(results['results']):
                             for candidate in plate['candidates']:
                                 # print(candidate['plate'])
-                                # If our regex does not match with a plate, then it is a good candidate
-                                if not invalid_plate_pattern.search(candidate['plate']):
+                                # If our regex does matches with a plate, then it is a good candidate
+                                #WARNING: Since our regex expects spaces and openalpr does not put
+                                #any spaces in found plate string, it never matches
+                                if plate_pattern.search(candidate['plate']):
                                     filtered_candidates.append(candidate['plate'])
                             # WARNING: It is assumed that there is only a single plate in the given image
                             # Hence, we break after the first plate, even if there are more plates

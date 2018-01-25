@@ -29,8 +29,8 @@ def read_image(path):
 
 
 def take_action(image, message, image_path, out_path):
-    invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
-    invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+    tr_plate_regex = PlateConfig.recognition["tr_plate_regex"]
+    plate_pattern = re.compile(tr_plate_regex)
     results = json.loads(message.decode("utf-8"))['result']
     try:
         for res in results:
@@ -58,22 +58,24 @@ def take_action(image, message, image_path, out_path):
                 print("Cropped plate image is written under: " + out_path)
 
             if plate:
-                if not invalid_plate_pattern.search(plate):
+                if plate_pattern.search(plate):
                     cv2.imwrite(out_path + "/" + str(plate) + '_' + str(uuid.uuid4()) + '.jpg', cropped_plate_img)
+                else:
+                    print("Did not save this: ", plate)
     except Exception as e:
         print(str(e))
 
 
 if __name__ == '__main__':
-    host = PlateConfig.recognizer_server['host']
-    port = PlateConfig.recognizer_server['port']
+    host = PlateConfig.plate_server['host']
+    port = PlateConfig.plate_server['port']
     address = zmq_comm.get_tcp_address(host, port)
     ctx = zmq.Context(io_threads=1)
-    socket = zmq_comm.init_server(ctx, address)
+    socket = zmq_comm.init_client(ctx, address)
 
     current_dir = os.path.dirname(os.path.realpath(__file__))
     unprocessed_imgs_path = "/home/taylan/local/plate_data/cropped"
-    output_path = "/home/taylan/local/plate_data/recognized"
+    output_path = "/home/taylan/local/plate_data/plate_test_regex"
 
     # Recursively reads images under a given directory path, queries the plates in images one by one
     image_paths = []

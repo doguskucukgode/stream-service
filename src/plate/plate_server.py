@@ -76,8 +76,8 @@ def handle_requests(socket, plate_detector, plate_recognizer):
     required_image_height = PlateConfig.recognition["image_height"]
 
     # Compile regex that matches with invalid TR plates
-    invalid_tr_plate_regex = PlateConfig.recognition["invalid_tr_plate_regex"]
-    invalid_plate_pattern = re.compile(invalid_tr_plate_regex)
+    tr_plate_regex = PlateConfig.recognition["tr_plate_regex"]
+    plate_pattern = re.compile(tr_plate_regex)
     net_inp = plate_recognizer.get_layer(name='the_input').input
     net_out = plate_recognizer.get_layer(name='softmax').output
     print("Plate server is started on: ", tcp_address)
@@ -164,8 +164,8 @@ def handle_requests(socket, plate_detector, plate_recognizer):
                 pred_texts = decode_batch(net_out_value)
                 filtered_candidates = []
                 for plate_text in pred_texts:
-                    # If our regex does not match with a plate, then it is a good candidate
-                    if not invalid_plate_pattern.search(plate_text):
+                    # If our regex matches with a plate, then it is a good candidate
+                    if plate_pattern.search(plate_text):
                         filtered_candidates.append(plate_text)
 
                 if len(filtered_candidates) > 0:
