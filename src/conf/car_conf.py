@@ -77,7 +77,7 @@ class CarConfig(BaseConfig):
         # we cannot make SSD use a different GPU fraction and the config below does not work for crop and classify
         # It is used in cropper however
         # "ssd_gpu_memory_frac" : 0.3,
-        "classifier_gpu_memory_frac" : 0.8,
+        "classifier_gpu_memory_frac" : 0.65,
         "enable_plate_recognition" : True,
         "plate_service_timeout" : 0.5,
         "gpu_to_use" : "0"
