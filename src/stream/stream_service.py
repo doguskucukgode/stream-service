@@ -66,12 +66,13 @@ class StreamProcess(multiprocessing.Process):
         print("Client initialized")
 
         counter = 0
-        tryCount = 0
+        try_count = 0
         # Interval control decides whether we process the frame or sent a previously processed copy
         interval_ctl = 0
         decoded_msg = None
+        max_reconnect_attempt = StreamConfig.stream["RECONNECT_TRY_COUNT"]
         print('Trying to read stream..')
-        while not self.exit.is_set():
+        while not self.exit.is_set() and try_count < max_reconnect_attempt:
             try:
                 # If subprocesses are not initialized, or they are dead, reinit them
                 if self.read_popen is None or self.read_popen.poll() is not None:
@@ -103,8 +104,9 @@ class StreamProcess(multiprocessing.Process):
                 im = im[:,:,::-1]
                 im = Image.fromarray(im)
                 im.save(self.write_popen.stdin, 'JPEG')
-            except ValueError as e:
+            except Exception as e:
                 print("Received error: ", str(e))
+                try_count += 1
                 sys.stdout.flush()
                 sys.stdin.flush()
                 sys.stderr.flush()
@@ -113,9 +115,12 @@ class StreamProcess(multiprocessing.Process):
                 time.sleep(0.1)
                 print("Retrying..")
                 continue
-            except Exception as e:
-                raise e
-        print("DONE")
+
+        if try_count == max_reconnect_attempt:
+            #TODO: Warn user from Kardes project's UI when this happens
+            print("Tried to reinitialize subprocesses " + str(max_reconnect_attempt) + " times but failed.")
+        print("The process has been stopped.")
+        self.shutdown()
 
     def process_frame(self, frame, decoded_msg, interval_ctl, counter):
         try:
