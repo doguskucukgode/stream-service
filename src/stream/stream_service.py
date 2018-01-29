@@ -77,16 +77,16 @@ class StreamProcess(multiprocessing.Process):
                 # If subprocesses are not initialized, or they are dead, reinit them
                 if self.read_popen is None or self.read_popen.poll() is not None:
                     self.read_popen = Popen([
-                        '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-gpu', '0', '-hwaccel', 'cuvid',
+                        '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-r', '25', '-gpu', '0', '-hwaccel', 'cuvid',
                         '-i', self.read_url, '-pix_fmt', 'rgb24', '-vcodec', 'rawvideo', '-an', '-sn', '-f', 'image2pipe', '-'
                     ], stdout=PIPE, bufsize=10**8)
                     print("read_popen initialized.")
 
                 if self.write_popen is None or self.write_popen.poll() is not None:
                     self.write_popen = Popen([
-                         '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-gpu', '0', '-hwaccel', 'cuvid',
+                         '/home/dogus/ffmpeg_install/FFmpeg/ffmpeg', '-r', '25', '-gpu', '0', '-hwaccel', 'cuvid',
                         '-f', 'image2pipe','-vcodec', 'mjpeg', '-i', '-', '-vf', 'scale=640:480',
-                        '-vcodec', 'h264', '-an', '-f', 'flv', self.write_url
+                        '-vcodec', 'h264', '-an', '-sn', '-f', 'flv', self.write_url
                     ], stdin=PIPE)
                     print("write_popen initialized.")
 
