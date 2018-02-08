@@ -24,7 +24,7 @@ def recognize(encodings, unk_encoding):
 
     face_distances = calculate_distances(encodings, unk_encoding)
     face_distances = sorted(face_distances.items(), key=operator.itemgetter(1))
-    neighbour_ids = [face_id.split('-')[0] for face_id, enc in face_distances[0:k]]
+    neighbour_ids = [face_id.split('_')[0] for face_id, enc in face_distances[0:k]]
     most_common_id, count = Counter(neighbour_ids).most_common(n=1)[0]
     name = FaceConfig.recognition["not_recog_msg"] if count <= threshold else most_common_id
     return name
