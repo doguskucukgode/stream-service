@@ -20,6 +20,7 @@ class FaceConfig(BaseConfig):
         "classifier_path" : BaseConfig.model_folder + "/" + "encodings.pkl",
         "facenet_ckpt" : BaseConfig.model_folder + "/" + "model-20170512-110547.ckpt-250000",
         "facenet_meta" : BaseConfig.model_folder + "/" + "model-20170512-110547.meta",
+        "ml_algo" : "knn",
         "width" : 250,
         "height" : 250,
         "depth" : 3,

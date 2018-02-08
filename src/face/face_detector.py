@@ -8,7 +8,6 @@ sys.path.insert(0, source_dir)
 import cv2
 import dlib
 import numpy as np
-from scipy import misc
 
 # Internal imports
 from conf.face_conf import FaceConfig
