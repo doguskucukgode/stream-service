@@ -78,7 +78,6 @@ class FaceRecognizer():
         # Run forward pass for each image to calculate embeddings
         for index, image_path in enumerate(full_paths):
             image = cv2.imread(image_path)
-            # image = fpreps.adjust_gamma(image)
             faces = detector.detect(image)
             if len(faces) == 0:
                 print("Could not detect a face in: ", image_path)
@@ -100,7 +99,6 @@ class FaceRecognizer():
         phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         embedding_size = embeddings.get_shape()[1]
         emb_array = np.zeros((1, embedding_size))
-        # image = fpreps.adjust_gamma(image)
         image = fpreps.prewhiten(image)
         image = np.expand_dims(image, axis=0)
         feed_dict = { images_placeholder: image, phase_train_placeholder:False }
