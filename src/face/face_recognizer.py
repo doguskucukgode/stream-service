@@ -4,6 +4,7 @@ import sys
 module_dir = os.path.dirname(os.path.realpath(__file__))
 source_dir = os.path.dirname(module_dir)
 sys.path.insert(0, source_dir)
+import uuid
 
 import cv2
 import pickle
@@ -26,6 +27,7 @@ class FaceRecognizer():
         self.sess = tf.Session(config=self.tf_conf)
         self.model = None
         self.encoding_dict = None
+        self.gamma_lut = fpreps.calculate_gamma_LUT(gamma=1.0)
         self.load()
 
     def load(self):
@@ -64,11 +66,6 @@ class FaceRecognizer():
             pickle.dump(all_encodings, f)
             print("Encodings are saved to the path: ", filepath)
 
-    def tag_images(self, img_list):
-        for i in range(len(img_list)):
-            img_list[i] = img_list[i].split("_")[0]
-        return img_list
-
     def generate_encodings(self, full_paths, base_paths):
          # Get input and output tensors
         images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
@@ -81,24 +78,20 @@ class FaceRecognizer():
         # Run forward pass for each image to calculate embeddings
         for index, image_path in enumerate(full_paths):
             image = cv2.imread(image_path)
+            # image = fpreps.adjust_gamma(image)
             faces = detector.detect(image)
-            face = None
             if len(faces) == 0:
                 print("Could not detect a face in: ", image_path)
                 continue
-            else:
-                face = faces[0]
+            face = faces[0]
             image = detector.align(image, face)
-            filename = os.path.basename(image_path)
             image = fpreps.prewhiten(image)
-            image = cv2.resize(image, (160, 160))
             image = np.expand_dims(image, axis=0)
             feed_dict = { images_placeholder: image, phase_train_placeholder:False }
             emb = self.sess.run(embeddings, feed_dict=feed_dict)
             emb_array[index] = emb
 
-        tags = self.tag_images(base_paths)
-        return dict(zip(tags, emb_array))
+        return dict(zip(base_paths, emb_array))
 
     def get_encoding(self, image):
         encoding = None
@@ -107,8 +100,8 @@ class FaceRecognizer():
         phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         embedding_size = embeddings.get_shape()[1]
         emb_array = np.zeros((1, embedding_size))
+        # image = fpreps.adjust_gamma(image)
         image = fpreps.prewhiten(image)
-        image = cv2.resize(image, (FaceConfig.detection["resize_h"], FaceConfig.detection["resize_w"]))
         image = np.expand_dims(image, axis=0)
         feed_dict = { images_placeholder: image, phase_train_placeholder:False }
         encoding = self.sess.run(embeddings, feed_dict=feed_dict)

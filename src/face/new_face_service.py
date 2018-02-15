@@ -42,10 +42,8 @@ class FaceService(Service):
                 image = zmq_comm.decode_request(request)
                 faces = self.face_detector.detect(image)
                 face_labels = []
-                print("got faces: ", faces, len(faces))
                 for index, face in enumerate(faces):
                     aligned_n_cropped = self.face_detector.align(image, face)
-                    # cv2.imwrite("/home/taylan/gitFolder/stream-service/KnownPeepsAligned/"+str(uuid.uuid4())+".jpg", aligned_n_cropped)
                     face_id = self.face_recognizer.recognize(aligned_n_cropped)
                     face_labels.append(face_id)
 
@@ -64,7 +62,6 @@ class FaceService(Service):
                     face_dict['name'] = match_name
                     face_dict['topleft'] = {"x": left,"y": top}
                     face_dict['bottomright'] = {"x": right,"y": bottom}
-                    print(face_dict)
                     predictions.append(face_dict)
 
                 final_results = predictions

@@ -28,6 +28,9 @@ def read_image(path):
 
 def evaluate_face(image_class, message):
     results = message['result']
+    print("Results: ", results)
+    if len(results) == 0:
+        print("Result is empty")
     for res in results:
         name = res['name']
         if image_class == name:
@@ -44,7 +47,7 @@ if __name__ == '__main__':
     ctx = zmq.Context(io_threads=1)
     socket = zmq_comm.init_client(ctx, address)
 
-    eval_folder = "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI/"
+    eval_folder = "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI_less/"
     image_list = os.listdir(eval_folder)
     image_list = [eval_folder + i for i in image_list]
 
@@ -54,7 +57,8 @@ if __name__ == '__main__':
     start = time.time()
     for im_path in image_list:
         filename = os.path.basename(im_path)
-        parts = filename.split('-')
+        print(filename)
+        parts = filename.split('_')
         im_class = parts[0]
         im_index = parts[1]
         img = cv2.imread(im_path)
