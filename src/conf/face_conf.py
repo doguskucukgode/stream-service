@@ -12,7 +12,8 @@ class FaceConfig(BaseConfig):
         "predictor_path" : BaseConfig.model_folder + "/" + "shape_predictor_68_face_landmarks.dat",
         "margin" : 32,
         "resize_h" : 160,
-        "resize_w" : 160
+        "resize_w" : 160,
+        "factor" : 2
     }
 
     recognition = {
@@ -25,7 +26,6 @@ class FaceConfig(BaseConfig):
         "height" : 250,
         "depth" : 3,
         "similarity_threshold" : 0.50,
-        "factor" : 2,
-        "knn" : 1,
+        "knn" : 3,
         "not_recog_msg" : "-",
     }

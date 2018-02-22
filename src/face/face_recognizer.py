@@ -25,9 +25,11 @@ class FaceRecognizer():
         self.gpu_options = tf.GPUOptions(allow_growth=True)
         self.tf_conf = tf.ConfigProto(log_device_placement=False, gpu_options=self.gpu_options)
         self.sess = tf.Session(config=self.tf_conf)
+        self.images_placeholder = None
+        self.embeddings = None
+        self.phase_train_placeholder = None
         self.model = None
         self.encoding_dict = None
-        self.gamma_lut = fpreps.calculate_gamma_LUT(gamma=1.0)
         self.load()
 
     def load(self):
@@ -52,6 +54,9 @@ class FaceRecognizer():
         self.sess.run(tf.global_variables_initializer())
         meta = tf.train.import_meta_graph(FaceConfig.recognition["facenet_meta"])
         meta.restore(self.sess, FaceConfig.recognition["facenet_ckpt"])
+        self.images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
+        self.embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+        self.phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         print("Facenet model loaded.")
 
     def load_encodings(self, filepath):
@@ -68,10 +73,7 @@ class FaceRecognizer():
 
     def generate_encodings(self, full_paths, base_paths):
          # Get input and output tensors
-        images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-        embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-        phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
-        embedding_size = embeddings.get_shape()[1]
+        embedding_size = self.embeddings.get_shape()[1]
         emb_array = np.zeros((len(full_paths), embedding_size))
 
         detector = FaceDetector()
@@ -86,23 +88,20 @@ class FaceRecognizer():
             image = detector.align(image, face)
             image = fpreps.prewhiten(image)
             image = np.expand_dims(image, axis=0)
-            feed_dict = { images_placeholder: image, phase_train_placeholder:False }
-            emb = self.sess.run(embeddings, feed_dict=feed_dict)
+            feed_dict = { self.images_placeholder: image, self.phase_train_placeholder:False }
+            emb = self.sess.run(self.embeddings, feed_dict=feed_dict)
             emb_array[index] = emb
 
         return dict(zip(base_paths, emb_array))
 
     def get_encoding(self, image):
         encoding = None
-        images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
-        embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
-        phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
-        embedding_size = embeddings.get_shape()[1]
+        embedding_size = self.embeddings.get_shape()[1]
         emb_array = np.zeros((1, embedding_size))
         image = fpreps.prewhiten(image)
         image = np.expand_dims(image, axis=0)
-        feed_dict = { images_placeholder: image, phase_train_placeholder:False }
-        encoding = self.sess.run(embeddings, feed_dict=feed_dict)
+        feed_dict = { self.images_placeholder: image, self.phase_train_placeholder:False }
+        encoding = self.sess.run(self.embeddings, feed_dict=feed_dict)
         return encoding
 
     def recognize(self, image):

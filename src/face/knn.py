@@ -19,7 +19,7 @@ def recognize(encodings, unk_encoding):
     # - k : number of nearest neighbours
     # - threshold: number of occurences of ids required to decide the class
     # When k=3 and threshold=1, we check the 3NNs and require at least 2 of them to have the same id
-    k = 3
+    k = FaceConfig.recognition["knn"]
     threshold = 1
 
     face_distances = calculate_distances(encodings, unk_encoding)

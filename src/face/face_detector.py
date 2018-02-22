@@ -33,9 +33,6 @@ class FaceDetector():
     def detect(self, img):
         faces = []
         try:
-            #TODO: Downscale images, detecting faces will take longer as the images get bigger
-            # height, width = img.shape[:2]
-            # img = cv2.resize(img, (width, height))
             #TODO: Why do we supply 1 as an argument here idk
             faces = self.detector(img, 1)
         except Exception as e:

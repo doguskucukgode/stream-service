@@ -29,6 +29,7 @@ class FaceService(Service):
 
     def handle_requests(self):
         print("Face service is started on: ", self.address)
+        factor = self.configs.detection["factor"]
         while True:
             result_dict = {}
             face_locations = []
@@ -40,6 +41,7 @@ class FaceService(Service):
                 # Get image from socket
                 request = self.socket.recv()
                 image = zmq_comm.decode_request(request)
+                image = cv2.resize(image, None, fx=1.0/factor, fy=1.0/factor, interpolation=cv2.INTER_LINEAR)
                 faces = self.face_detector.detect(image)
                 face_labels = []
                 for index, face in enumerate(faces):
@@ -54,10 +56,10 @@ class FaceService(Service):
                     if match_name == self.configs.recognition["not_recog_msg"]:
                         continue
                     # Scale back up face locations since the frame we detected in was scaled to 1/4 size
-                #     top = int(top * factor)
-                #     bottom = int(bottom * factor)
-                #     left = int(left * factor)
-                #     right = int(right * factor)
+                    top = int(top * factor)
+                    bottom = int(bottom * factor)
+                    left = int(left * factor)
+                    right = int(right * factor)
                     face_dict = {}
                     face_dict['name'] = match_name
                     face_dict['topleft'] = {"x": left,"y": top}
