@@ -27,10 +27,10 @@ def read_image(path):
 
 
 def evaluate_face(image_class, message):
+    print("Recieved message: ", message)
     results = message['result']
-    print("Results: ", results)
     if len(results) == 0:
-        print("Result is empty")
+        return False
     for res in results:
         name = res['name']
         if image_class == name:
@@ -47,12 +47,15 @@ if __name__ == '__main__':
     ctx = zmq.Context(io_threads=1)
     socket = zmq_comm.init_client(ctx, address)
 
-    eval_folder = "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI_less/"
+    eval_folder = "/home/taylan/local/face-recognition/datasets/FEI_Brazil/FEI_wo_11_12_13/"
     image_list = os.listdir(eval_folder)
     image_list = [eval_folder + i for i in image_list]
 
     total_num_of_images = len(image_list)
     correctly_recognized = 0
+    wrong = 0
+    no_face = 0
+    not_sure = 0
 
     start = time.time()
     for im_path in image_list:
@@ -64,16 +67,32 @@ if __name__ == '__main__':
         img = cv2.imread(im_path)
         encoded_img = read_image(im_path)
         socket.send(encoded_img)
-        message = socket.recv_json()
+        received = socket.recv_json()
         try:
-            evaluation = evaluate_face(im_class, message)
-            if evaluation is True:
-                correctly_recognized += 1
+            print("Recieved message: ", received)
+            message = received['message']
+            results = received['result']
+
+            if message == "OK":
+                if len(results) == 0:
+                    not_sure += 1
+                else:
+                    for res in results:
+                        name = res['name']
+                        if im_class == name:
+                            correctly_recognized += 1
+                        else:
+                            wrong += 1
+                            print("Wrongly classified: ", im_class, name)
+                            cv2.imwrite(
+                                "/home/taylan/local/face-recognition/datasets/FEI_Brazil/wrong_classifications/wrong_"\
+                                 + str(im_class) + "-" + str(im_index), img, params=None\
+                            )
+            elif message == "Could not find any faces":
+                no_face += 1
             else:
-                cv2.imwrite(
-                    "/home/taylan/local/face-recognition/datasets/FEI_Brazil/wrong_classifications/wrong_"\
-                     + str(im_class) + "-" + str(im_index), img, params=None\
-                )
+                raise Exception("An error occured during querying")
+
         except Exception as e:
             print ("Could not evaluate the given image.")
             print(e)
@@ -81,6 +100,9 @@ if __name__ == '__main__':
     end = time.time()
     print("-- ALL RESULTS --")
     print("Correct: ", correctly_recognized)
+    print("Wrong: ", wrong)
+    print("No face: ", no_face)
+    print("Not sure: ", not_sure)
     print("Total: ", total_num_of_images)
     print(str(correctly_recognized) + " out of " + str(total_num_of_images) + " are recognized correctly.")
     print("-----------------")
