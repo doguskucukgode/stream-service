@@ -32,9 +32,6 @@ class FaceService(Service):
         factor = self.configs.detection["factor"]
         while True:
             result_dict = {}
-            face_locations = []
-            face_encodings = []
-            face_names = []
             message = "OK"
             final_results = []
             try:
@@ -44,6 +41,8 @@ class FaceService(Service):
                 image = cv2.resize(image, None, fx=1.0/factor, fy=1.0/factor, interpolation=cv2.INTER_LINEAR)
                 faces = self.face_detector.detect(image)
                 face_labels = []
+                if len(faces) == 0:
+                    message = "Could not find any faces"
                 for index, face in enumerate(faces):
                     aligned_n_cropped = self.face_detector.align(image, face)
                     face_id = self.face_recognizer.recognize(aligned_n_cropped)
