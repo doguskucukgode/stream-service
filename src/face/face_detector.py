@@ -33,8 +33,10 @@ class FaceDetector():
     def detect(self, img):
         faces = []
         try:
-            #TODO: Why do we supply 1 as an argument here idk
-            faces = self.detector(img, 1)
+            # The 1 in the second argument indicates that we should upsample the image
+            # 1 time.  This will make everything bigger and allow us to detect more
+            # faces.
+            faces = self.detector(img, 0)
         except Exception as e:
             print("Could not detect faces due to: ", str(e))
         return faces

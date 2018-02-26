@@ -30,8 +30,8 @@ def recognize(encodings, unk_encoding):
     face_distances = sorted(face_distances.items(), key=operator.itemgetter(1))
     neighbour_ids = [face_id.split('_')[0] for face_id, enc in face_distances[0:k]]
 
-    print("Closest class and distance: ", face_distances[0][0], face_distances[0][1])
-    print("3-NN:", neighbour_ids)
+    # print("Closest class and distance: ", face_distances[0][0], face_distances[0][1])
+    # print("3-NN:", neighbour_ids)
     if face_distances[0][1] > dist_threshold:
         # print("Decided: -")
         return FaceConfig.recognition["not_recog_msg"]

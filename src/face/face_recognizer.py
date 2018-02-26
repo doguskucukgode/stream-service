@@ -27,6 +27,7 @@ class FaceRecognizer():
         self.sess = tf.Session(config=self.tf_conf)
         self.images_placeholder = None
         self.embeddings = None
+        self.embedding_size = None
         self.phase_train_placeholder = None
         self.model = None
         self.encoding_dict = None
@@ -56,6 +57,7 @@ class FaceRecognizer():
         meta.restore(self.sess, FaceConfig.recognition["facenet_ckpt"])
         self.images_placeholder = tf.get_default_graph().get_tensor_by_name("input:0")
         self.embeddings = tf.get_default_graph().get_tensor_by_name("embeddings:0")
+        self.embedding_size = self.embeddings.get_shape()[1]
         self.phase_train_placeholder = tf.get_default_graph().get_tensor_by_name("phase_train:0")
         print("Facenet model loaded.")
 
@@ -73,8 +75,7 @@ class FaceRecognizer():
 
     def generate_encodings(self, full_paths, base_paths):
          # Get input and output tensors
-        embedding_size = self.embeddings.get_shape()[1]
-        emb_array = np.zeros((len(full_paths), embedding_size))
+        emb_array = np.zeros((len(full_paths), self.embedding_size))
 
         detector = FaceDetector()
         # Run forward pass for each image to calculate embeddings
@@ -95,9 +96,7 @@ class FaceRecognizer():
         return dict(zip(base_paths, emb_array))
 
     def get_encoding(self, image):
-        encoding = None
-        embedding_size = self.embeddings.get_shape()[1]
-        emb_array = np.zeros((1, embedding_size))
+        emb_array = np.zeros((1, self.embedding_size))
         image = fpreps.prewhiten(image)
         image = np.expand_dims(image, axis=0)
         feed_dict = { self.images_placeholder: image, self.phase_train_placeholder:False }
