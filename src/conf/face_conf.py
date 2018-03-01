@@ -13,7 +13,7 @@ class FaceConfig(BaseConfig):
         "margin" : 32,
         "resize_h" : 160,
         "resize_w" : 160,
-        "factor" : 1.5
+        "factor" : 2
     }
 
     recognition = {

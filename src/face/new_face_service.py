@@ -2,6 +2,7 @@
 import os
 import cv2
 import uuid
+import dlib
 
 # Internal imports
 from service import Service
@@ -38,12 +39,20 @@ class FaceService(Service):
                 # Get image from socket
                 request = self.socket.recv()
                 image = zmq_comm.decode_request(request)
-                image = cv2.resize(image, None, fx=1.0/factor, fy=1.0/factor, interpolation=cv2.INTER_LINEAR)
-                faces = self.face_detector.detect(image)
+                gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+                gray = cv2.resize(gray, None, fx=1.0/factor, fy=1.0/factor, interpolation=cv2.INTER_LINEAR)
+                faces = self.face_detector.detect(gray)
                 face_labels = []
                 if len(faces) == 0:
                     message = "Could not find any faces"
                 for index, face in enumerate(faces):
+                    #print(face)
+                    face = dlib.rectangle(
+                        int(face.left() * factor),
+                        int(face.top() * factor),
+                        int(face.right() * factor),
+                        int(face.bottom() * factor)
+                    )
                     aligned_n_cropped = self.face_detector.align(image, face)
                     face_id = self.face_recognizer.recognize(aligned_n_cropped)
                     face_labels.append(face_id)

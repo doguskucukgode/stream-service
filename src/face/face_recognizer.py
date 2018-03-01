@@ -17,6 +17,7 @@ import face.knn as faceknn
 import face.preprocessing as fpreps
 from conf.face_conf import FaceConfig
 from face.face_detector import FaceDetector
+from helper.time_stuff import measure_time
 
 class FaceRecognizer():
 
@@ -33,6 +34,7 @@ class FaceRecognizer():
         self.encoding_dict = None
         self.load()
 
+    @measure_time
     def load(self):
         self.load_facenet_model()
         # If the encodings for faces are calculated before, load and use them
@@ -95,6 +97,7 @@ class FaceRecognizer():
 
         return dict(zip(base_paths, emb_array))
 
+    @measure_time
     def get_encoding(self, image):
         emb_array = np.zeros((1, self.embedding_size))
         image = fpreps.prewhiten(image)

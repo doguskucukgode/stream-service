@@ -11,6 +11,7 @@ import numpy as np
 
 # Internal imports
 from conf.face_conf import FaceConfig
+from helper.time_stuff import measure_time
 
 LEFT_EYE_INDICES = [36, 37, 38, 39, 40, 41]
 RIGHT_EYE_INDICES = [42, 43, 44, 45, 46, 47]
@@ -22,6 +23,7 @@ class FaceDetector():
         self.predictor = None
         self.load()
 
+    @measure_time
     def load(self):
         try:
             self.detector = dlib.get_frontal_face_detector()
@@ -30,6 +32,7 @@ class FaceDetector():
             print("Could not load face detector due to: ", str(e))
             raise e
 
+    @measure_time
     def detect(self, img):
         faces = []
         try:
@@ -41,6 +44,7 @@ class FaceDetector():
             print("Could not detect faces due to: ", str(e))
         return faces
 
+    @measure_time
     def align(self, img, face):
         cropped = None
         height, width = img.shape[:2]

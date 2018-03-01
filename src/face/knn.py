@@ -5,7 +5,9 @@ from collections import Counter
 
 # Internal imports
 from conf.face_conf import FaceConfig
+from helper.time_stuff import measure_time
 
+@measure_time
 def calculate_distances(encodings, unk_encoding):
     face_distances = {}
     for face_id, enc in encodings.items():
@@ -14,6 +16,7 @@ def calculate_distances(encodings, unk_encoding):
         face_distances[face_id] = dist[0]
     return face_distances
 
+@measure_time
 def recognize(encodings, unk_encoding):
     # The values below determine how the algorithm behaves:
     # - k : number of nearest neighbours
