@@ -1,3 +1,11 @@
+# The latest version of car cropper and classification(CRCL) service
+# Disregard other source files in this folder, they are basically the standalone versions
+# You may use them if you need cropping or classifying only
+
+# This version concurrently sends a request to the PlateService
+# So be sure that PlateService is online, or it waits until the decided timeout
+#for PlateService, hence slows down the whole car recognition service
+
 # External imports
 import io
 import os

@@ -1,3 +1,5 @@
+# Plate detection service: it uses OpenCV's CascadeClassifier
+
 # External imports
 import os
 import sys

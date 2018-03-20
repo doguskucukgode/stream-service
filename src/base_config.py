@@ -1,3 +1,5 @@
+# Base class for configurations such as CarConfig, PlateConfig, etc.
+
 import os
 
 class BaseConfig:

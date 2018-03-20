@@ -1,3 +1,5 @@
+# Client code to test plate detection/recognition
+
 # External imports
 import os
 import re

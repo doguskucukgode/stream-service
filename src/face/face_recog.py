@@ -1,3 +1,5 @@
+# Standalone version of face recognition service
+
 # External imports
 from __future__ import division
 import os

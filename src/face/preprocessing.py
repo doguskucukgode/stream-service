@@ -1,3 +1,5 @@
+# All things related to image preprocessing are implemented here
+
 # External imports
 import cv2
 import numpy as np

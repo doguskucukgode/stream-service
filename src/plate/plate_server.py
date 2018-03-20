@@ -1,3 +1,6 @@
+# A detached version of plate_service.py
+# In other words, you can test plate services without using a ServiceManager
+
 # External imports
 import os
 import re

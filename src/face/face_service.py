@@ -1,3 +1,5 @@
+# FaceService that detects and recognizes the given face
+
 # External imports
 from __future__ import division
 import os

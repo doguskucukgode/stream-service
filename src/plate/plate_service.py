@@ -1,3 +1,5 @@
+# Plate service that handles both detection and recognition of plates
+
 # External imports
 import os
 import re

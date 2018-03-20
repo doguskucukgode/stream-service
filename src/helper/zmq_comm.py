@@ -1,3 +1,5 @@
+# Everything related to ZMQ communication is implemented here
+
 import cv2
 import zmq
 import base64

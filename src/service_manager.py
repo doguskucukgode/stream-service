@@ -1,3 +1,5 @@
+# Manager class that serves all the services like plate recognition, car recognition, etc.
+
 # External imports
 import sys
 import argparse

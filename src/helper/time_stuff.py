@@ -1,3 +1,6 @@
+# Everything related to time is implemented here:
+# Measuring execution time of a function, adding timeout to a function, etc.
+
 import time
 import signal
 

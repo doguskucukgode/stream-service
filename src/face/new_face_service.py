@@ -1,3 +1,5 @@
+# Updated version of the face service
+
 # External imports
 import os
 import cv2

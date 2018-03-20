@@ -1,3 +1,5 @@
+# Service base class, all services (face recog., plate recog.) derives from it
+
 # External imports
 import zmq
 

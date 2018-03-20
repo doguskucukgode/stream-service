@@ -1,3 +1,6 @@
+# Old implementation of stream service that uses OpenCV's VideoCapture
+# It is not removed since we cannot capture IPCam stream with the new version
+
 # External imports
 import os
 import io

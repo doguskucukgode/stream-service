@@ -1,3 +1,6 @@
+# A dynamic import system that uses reflection
+# to figure out and load the necessary configs on the run.
+
 import sys
 import inspect
 import importlib

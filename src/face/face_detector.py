@@ -1,3 +1,7 @@
+# FaceDetector class that uses dlib's face detection algorithm with 68_landmark shape predictor
+# To use the 5_landmark shape predictor, don't forget to change these global variables below:
+# LEFT_EYE_INDICES and RIGHT_EYE_INDICES
+
 # External imports
 import os
 import sys

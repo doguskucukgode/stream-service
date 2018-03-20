@@ -1,3 +1,5 @@
+# This piece of code applies random forests technique to face recognition
+
 # External imports
 import os
 import time

@@ -1,3 +1,5 @@
+# A simple code that is written without care, just to evaluate our face recognition service
+
 # External imports
 import os
 import sys

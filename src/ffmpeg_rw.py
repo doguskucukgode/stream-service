@@ -1,3 +1,5 @@
+# A simple piece of code to try ffmpeg subprocesses
+
 # External imports
 import cv2
 import zmq
