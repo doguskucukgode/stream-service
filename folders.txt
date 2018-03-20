@@ -1,0 +1,11 @@
+/home/taylan/w_Python -> Python ile denenen seyler (MTCNN, VDCNN, DCGAN, Multi-GPU training, Cython, vs.)
+/home/taylan/w_Python/oguzhan_face/Face_server -> Oguzhan'in face recognition ile ilgili yaptiklari
+/home/taylan/gitFolder -> All git projects
+/home/taylan/local/car detection/datasets -> Car recognition datasets
+/home/taylan/local/face-recognition/datasets -> Face recognition datasets
+/home/taylan/local/DL -> DL papers
+/home/taylan/local/NLP -> Everything related to NLP (both TR and EN)
+/home/taylan/local/plate_data -> Plate recognition dataset
+/home/taylan/local -> Other datasets and stuff
+/home/taylan/w_{PROGRAMMING_LANGUAGE} -> Workspace for that {PROGRAMMING_LANGUAGE}
+/home/taylan/Desktop/car_images -> Car/plate recognition test images
